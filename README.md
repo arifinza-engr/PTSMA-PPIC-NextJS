@@ -49,7 +49,7 @@ npm run build    # Build produksi
 npm run e2e      # Alur browser di database salinan sementara
 ```
 
-Vitest memerlukan `TEST_DATABASE_URL`; Playwright memerlukan `E2E_DATABASE_URL`. Keduanya harus menunjuk database PostgreSQL khusus, bukan database aplikasi.
+Vitest memerlukan `TEST_DATABASE_URL`; Playwright memerlukan `E2E_DATABASE_URL`. Keduanya harus menunjuk database PostgreSQL khusus, bukan database aplikasi. Tes login Playwright menggunakan akun yang ada pada database E2E melalui `E2E_ADMIN_USERNAME` dan `E2E_ADMIN_PASSWORD`; tanpa keduanya, tes login dilewati.
 ## Autentikasi dan akses peran
 
 Autentikasi memakai Auth.js / NextAuth Credentials dan akun PostgreSQL. Setelah mengisi `DATABASE_URL` dan `AUTH_SECRET` di `.env.local`, jalankan migrasi:

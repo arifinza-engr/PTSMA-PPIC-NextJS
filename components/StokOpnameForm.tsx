@@ -17,14 +17,14 @@ const toOptions = (arr: (string | number)[]): SelectOption[] =>
   arr.map((v) => ({ value: String(v), label: String(v) }));
 
 const selectStyles: StylesConfig<SelectOption, false> = {
-  control: (base) => ({
+  control: (base, state) => ({
     ...base,
     flexWrap: "nowrap",
     borderRadius: "9px",
     minHeight: "43px",
-    borderColor: "#cbd5e1",
     backgroundColor: "#ffffff",
-    boxShadow: "none",
+    boxShadow: state.isFocused ? "0 0 0 3px #203ea126" : "none",
+    borderColor: state.isFocused ? "#203ea1" : "#cbd5e1",
   }),
   valueContainer: (base) => ({ ...base, flexWrap: "nowrap", overflow: "hidden" }),
   input: (base) => ({ ...base, color: "#0f172a" }),
@@ -48,7 +48,7 @@ const selectStyles: StylesConfig<SelectOption, false> = {
     borderRadius: "6px",
     fontSize: "0.8125rem",
     color: state.isSelected ? "#ffffff" : "#334155",
-    backgroundColor: state.isSelected ? "#0f766e" : state.isFocused ? "#f1f5f9" : "transparent",
+    backgroundColor: state.isSelected ? "#203ea1" : state.isFocused ? "#dbeafe" : "transparent",
   }),
 };
 

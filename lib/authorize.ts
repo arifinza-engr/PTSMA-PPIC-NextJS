@@ -18,9 +18,9 @@ export async function requireRole(allowed: readonly AppRole[]): Promise<Response
 }
 
 export function sameRequestOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  if (!origin) return true;
-  try { return new URL(origin).host === req.headers.get("host"); }
+  const origin = req.headers.get("origin") ?? req.headers.get("referer");
+  if (!origin) return false;
+  try { return new URL(origin).origin === req.nextUrl.origin; }
   catch { return false; }
 }
 

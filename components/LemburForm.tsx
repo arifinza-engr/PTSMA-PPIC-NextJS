@@ -11,7 +11,7 @@ const toOptions = (arr: string[]) => arr.map((v) => ({ value: v, label: v }));
 type Choice = { value: string; label: string };
 
 const selectStyles: StylesConfig<Choice, false> = {
-  control: (base) => ({ ...base, borderRadius: "9px", minHeight: "43px", borderColor: "#cbd5e1", backgroundColor: "#ffffff", boxShadow: "none", flexWrap: "nowrap" }),
+  control: (base, state) => ({ ...base, borderRadius: "9px", minHeight: "43px", borderColor: state.isFocused ? "#203ea1" : "#cbd5e1", backgroundColor: "#ffffff", boxShadow: state.isFocused ? "0 0 0 3px #203ea126" : "none", flexWrap: "nowrap" }),
   valueContainer: (base) => ({ ...base, flexWrap: "nowrap", overflow: "hidden" }),
   input: (base) => ({ ...base, color: "#0f172a" }),
   singleValue: (base) => ({ ...base, color: "#0f172a", whiteSpace: "nowrap" }),
@@ -23,7 +23,7 @@ const selectStyles: StylesConfig<Choice, false> = {
   menuList: (base) => ({ ...base, padding: "4px" }),
   option: (base, state) => ({ ...base, borderRadius: "6px", fontSize: "0.8125rem", whiteSpace: "nowrap",
     color: state.isSelected ? "#ffffff" : "#334155",
-    backgroundColor: state.isSelected ? "#0f766e" : state.isFocused ? "#f1f5f9" : "transparent" }),
+    backgroundColor: state.isSelected ? "#203ea1" : state.isFocused ? "#dbeafe" : "transparent" }),
 };
 
 export default function LemburForm() {

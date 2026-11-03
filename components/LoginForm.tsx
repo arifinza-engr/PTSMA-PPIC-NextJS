@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export default function LoginForm() {
   const [error, setError] = useState("");
@@ -12,30 +13,37 @@ export default function LoginForm() {
     setPending(true);
     setError("");
     const form = new FormData(event.currentTarget);
-    const result = await signIn("credentials", {
-      username: form.get("username"),
-      password: form.get("password"),
-      redirect: false,
-    });
-    if (result?.error) {
-      setError("Nama pengguna atau kata sandi tidak sesuai.");
+    try {
+      const result = await signIn("credentials", {
+        username: form.get("username"),
+        password: form.get("password"),
+        redirect: false,
+      });
+      if (!result || result.error) {
+        setError("Nama pengguna atau kata sandi salah. Periksa kembali lalu coba lagi.");
+        setPending(false);
+        return;
+      }
+      const callbackUrl = new URL(window.location.href).searchParams.get("callbackUrl");
+      window.location.assign(safeRedirectPath(callbackUrl));
+    } catch {
+      setError("Tidak dapat masuk saat ini. Silakan coba lagi.");
       setPending(false);
-      return;
     }
-    const callbackUrl = new URL(window.location.href).searchParams.get("callbackUrl");
-    window.location.assign(callbackUrl?.startsWith("/") ? callbackUrl : "/");
   }
 
-  return <form className="space-y-5" onSubmit={submit}>
-    <label className="block space-y-2 text-sm font-medium">Nama pengguna
-      <input name="username" autoComplete="username" required className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
-    </label>
-    <label className="block space-y-2 text-sm font-medium">Kata sandi
-      <input name="password" type="password" autoComplete="current-password" required className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
-    </label>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-    <button disabled={pending} className="w-full rounded-lg bg-blue-700 px-4 py-2.5 font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
-      {pending ? "Memeriksa akun…" : "Masuk"}
-    </button>
-  </form>;
+  return (
+    <form className="login-form" onSubmit={submit}>
+      <label htmlFor="login-username">Nama pengguna</label>
+      <input id="login-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required disabled={pending} />
+      <label htmlFor="login-password">Kata sandi</label>
+      <input id="login-password" name="password" type="password" autoComplete="current-password" required disabled={pending} />
+      {error && <p role="alert" className="login-error">{error}</p>}
+      <button type="submit" disabled={pending}>
+        <span>{pending ? "Sedang masuk…" : "Masuk"}</span>
+        {!pending && <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="M4.5 10h10m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+        {pending && <span className="login-spinner" aria-hidden="true" />}
+      </button>
+    </form>
+  );
 }

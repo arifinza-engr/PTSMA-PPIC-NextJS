@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { isAppRole, roleLabels } from "@/lib/auth-roles";
+import { Button } from "@/components/ui/button";
 import {
   BsBoxSeam, BsClipboardCheck, BsClockHistory,
-  BsGrid, BsList, BsPeople, BsTable, BsX,
+  BsBoxArrowRight, BsGrid, BsList, BsPeople, BsTable, BsX,
 } from "react-icons/bs";
 
 const groups = [
@@ -55,7 +57,7 @@ export default function Nav() {
   return <>
     <header className="mobile-topbar">
       <Link href="/" className="brand-mark" aria-label="PPIC Autopart, ke ringkasan">
-        <span className="brand-symbol">PA</span>
+        <Image className="brand-symbol" src="/LOGO-PTSMA-NOBG.png" alt="" width={42} height={42} priority />
         <span className="brand-copy"><strong>PPIC Autopart</strong><small>Operations</small></span>
       </Link>
       <button type="button" className="menu-toggle" aria-label={open ? "Tutup menu" : "Buka menu"}
@@ -67,7 +69,7 @@ export default function Nav() {
     <nav id="app-navigation" className={`app-nav${open ? " is-open" : ""}`} aria-label="Navigasi utama">
       <div className="sidebar-top">
         <Link href="/" onClick={() => setOpen(false)} className="brand-mark" aria-label="PPIC Autopart, ke ringkasan">
-          <span className="brand-symbol">PA</span>
+          <Image className="brand-symbol" src="/LOGO-PTSMA-NOBG.png" alt="" width={42} height={42} priority />
           <span className="brand-copy"><strong>PPIC Autopart</strong><small>Operations workspace</small></span>
         </Link>
         <div className="workspace-tag"><span className="status-dot" /> Sistem operasional aktif</div>
@@ -93,7 +95,10 @@ export default function Nav() {
         <div className="profile-chip"><span className="profile-avatar">PA</span>
           <span><strong>{session?.user.name ?? "Pengguna"}</strong><small>{isAppRole(role) ? roleLabels[role] : ""}</small></span>
         </div>
-        <button type="button" className="mt-3 w-full rounded-md border border-slate-600 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800" onClick={() => signOut({ callbackUrl: "/login" })}>Keluar</button>
+        <Button type="button" variant="destructive" className="mt-3 w-full justify-center" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <BsBoxArrowRight aria-hidden="true" size={17} />
+          <span>Log Out</span>
+        </Button>
       </div>
     </nav>
   </>;

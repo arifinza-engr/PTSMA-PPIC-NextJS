@@ -92,12 +92,12 @@ function SectionHeading({
 
 function TaskLinks({ items }: { items: typeof operationalLinks }) {
   return (
-    <div className="divide-y rounded-lg border bg-white">
+    <div className="divide-y rounded-xl border bg-white text-card-foreground shadow-sm">
       {items.map(({ title, detail, href, icon: Icon }) => (
         <Link
           key={href}
           href={href}
-          className="group flex min-h-16 items-center gap-3 px-4 py-3 transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-muted/40 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="group flex min-h-16 items-center gap-3 px-4 py-3 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-primary/[0.03] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <Icon
             className="size-4 shrink-0 text-primary/80"
@@ -163,7 +163,7 @@ export default function Dashboard() {
               href={href}
               className="group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Card className="h-full border-l-4 border-l-primary/70 transition-colors group-hover:bg-primary/[0.03]">
+              <Card className="h-full border-l-4 border-l-primary/70 bg-white transition-colors group-hover:bg-primary/[0.03]">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <span className="rounded-sm bg-primary/10 px-2 py-1 text-[11px] font-semibold tracking-wide text-primary">

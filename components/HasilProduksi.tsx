@@ -461,7 +461,7 @@ export default function HasilProduksi({
         <>
           {/* Summary & Search */}
           <Card className="mb-4 border-border/80 shadow-sm">
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
+            <CardContent className="flex min-h-24 flex-wrap items-center justify-between gap-4 p-4 pb-2">
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 {data.divisi && (
                   <span className="font-semibold text-foreground">
@@ -495,7 +495,7 @@ export default function HasilProduksi({
                       table.setGlobalFilter(e.target.value);
                       table.setPageIndex(0);
                     }}
-                    className="w-full pl-9 pr-9 sm:w-64"
+                    className="w-full !pl-9 !pr-9 sm:w-64"
                   />
                   {searchQuery && (
                     <Button
@@ -517,7 +517,7 @@ export default function HasilProduksi({
                   onClick={exportExcel}
                   disabled={exporting || !data}
                   variant="outline"
-                  className="shrink-0 border-primary/30 text-primary hover:bg-primary/5"
+                  className="export-excel-button shrink-0 hover:bg-green-50"
                 >
                   {exporting ? (
                     <>

@@ -18,7 +18,7 @@ const FIELDS: Record<Kind, Field[]> = {
     { key: "jabatan", label: "Jabatan", type: "job" }, { key: "isActive", label: "Aktif", type: "check" },
   ],
   product: [
-    { key: "productLineId", label: "Lini", type: "line" }, { key: "type", label: "Type" },
+    { key: "productLineId", label: "Produk", type: "line" }, { key: "type", label: "Type" },
     { key: "grade", label: "Grade" }, { key: "kulit", label: "Kulit" },
     { key: "namaBarang", label: "Nama Barang" }, { key: "warna", label: "Warna" },
     { key: "op", label: "OP" }, { key: "kode", label: "Kode" },
@@ -26,7 +26,7 @@ const FIELDS: Record<Kind, Field[]> = {
     { key: "powderCoating", label: "Powder Coating" },
   ],
   division: [
-    { key: "productLineId", label: "Lini", type: "line" }, { key: "nama", label: "Nama" },
+    { key: "productLineId", label: "Produk", type: "line" }, { key: "nama", label: "Nama" },
     { key: "urutan", label: "Urutan", type: "number" },
     ...["isCasting", "isTeam", "hasNg", "hasMerk", "hasCat", "hasMesin", "hasNgB"]
       .map(key => ({ key, label: key, type: "check" as const })),
@@ -150,7 +150,7 @@ export default function MasterTables() {
     <div className="table-frame max-h-[600px] overflow-auto"><table>
       <thead><tr><th>ID</th>{FIELDS[kind].map(field => <th key={field.key}>{field.label}</th>)}<th>Aksi</th></tr></thead>
       <tbody>{rows.map(row => <tr key={row.id}><td>{row.id}</td>
-        {FIELDS[kind].map(field => <td key={field.key}>{field.type === "check" ? (row[field.key] ? "Ya" : "Tidak") : String(row[field.key] ?? "—")}</td>)}
+        {FIELDS[kind].map(field => <td key={field.key}>{field.type === "check" ? (row[field.key] ? "Ya" : "Tidak") : field.type === "line" ? (master?.lines.find(line => line.id === Number(row[field.key]))?.nama ?? "—") : String(row[field.key] ?? "—")}</td>)}
         <td className="whitespace-nowrap"><button type="button" className="table-action" onClick={() => edit(row)}>Ubah</button>
           {kind === "product" && <button type="button" className="table-action danger" onClick={() => removeProduct(row.id)}>Hapus</button>}
         </td></tr>)}</tbody>

@@ -1,0 +1,1 @@
+ALTER TABLE "produksi_item" ALTER COLUMN "qty_kg" SET DATA TYPE double precision;

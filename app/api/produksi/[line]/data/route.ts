@@ -13,14 +13,14 @@ export async function GET(
   const sp = req.nextUrl.searchParams;
 
   try {
-    // Ambil divisi dari params atau dari master.
-    let divisi = sp.get("divisi");
-    if (!divisi) {
-      const options = (await getMaster(line)).divisiOptions;
-      if (options.length > 0) divisi = options[0];
+    // Ambil lini dari params atau dari master.
+    let lini = sp.get("lini");
+    if (!lini) {
+      const options = (await getMaster(line)).liniOptions;
+      if (options.length > 0) lini = options[0];
     }
     const result = await getProductionData(line as Line, {
-      divisi,
+      lini,
       from: sp.get("from"),
       to: sp.get("to"),
       limit: sp.has("limit") ? sp.get("limit") : undefined,
@@ -28,7 +28,7 @@ export async function GET(
 
     return Response.json({
       ...result,
-      divisi: divisi || null,
+      lini: lini || null,
     });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });

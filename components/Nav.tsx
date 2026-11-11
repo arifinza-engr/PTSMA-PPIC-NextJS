@@ -31,7 +31,7 @@ const groups = [
 
 const adminLinks = [
   { href: "/lembur/daftar", label: "Persetujuan Lembur", icon: BsClockHistory },
-  { href: "/master", label: "Master Data", icon: BsPeople },
+  { href: "/master", label: "Master Karyawan", icon: BsPeople },
 ];
 
 export default function Nav() {
@@ -41,8 +41,11 @@ export default function Nav() {
   if (pathname === "/login") return null;
   const role: unknown = session?.user.role;
   const canInput = role === "leader_spv" || role === "superadmin";
+  const canCorrectStock = role === "ppic" || role === "qc" || role === "superadmin";
   const canApproveOvertime = role === "hrd" || role === "superadmin";
+  const canViewOvertime = role === "pimpinan";
   const canManage = role === "superadmin";
+  const canManageTargets = canManage || role === "ppic";
 
   const renderLink = (link: { href: string; label: string; icon: typeof BsGrid; exact?: boolean }) => {
     const active = link.exact ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`);
@@ -77,7 +80,8 @@ export default function Nav() {
       <div className="nav-scroll">
         {groups.map(group => {
           const visibleLinks = group.links.filter(link => {
-            if (["/produksi/brakeshoe", "/produksi/discpad", "/produksi/handle", "/stok-opname", "/lembur"].includes(link.href)) return canInput;
+            if (link.href === "/stok-opname") return canInput || canCorrectStock;
+            if (["/produksi/brakeshoe", "/produksi/discpad", "/produksi/handle", "/lembur"].includes(link.href)) return canInput;
             return true;
           });
           return visibleLinks.length ? <section key={group.label} className="nav-group" aria-label={group.label}>
@@ -86,9 +90,12 @@ export default function Nav() {
           </section> : null;
         })}
         <section className="nav-group" aria-label="Administrasi">
-          {(canApproveOvertime || canManage) && <><h2>Administrasi</h2>
+          {(canApproveOvertime || canViewOvertime || canManage || canManageTargets) && <><h2>Administrasi</h2>
           {canApproveOvertime && renderLink(adminLinks[0])}
-          {canManage && <>{renderLink(adminLinks[1])}{renderLink({ href: "/pengguna", label: "Pengguna", icon: BsPeople })}</>}</>}
+          {canViewOvertime && renderLink({ ...adminLinks[0], label: "Daftar Lembur" })}
+          {canManage && renderLink(adminLinks[1])}
+          {canManageTargets && renderLink({ href: "/target-produksi", label: "Target Produksi", icon: BsTable })}
+          {canManage && renderLink({ href: "/pengguna", label: "Pengguna", icon: BsPeople })}</>}
         </section>
       </div>
       <div className="sidebar-footer">

@@ -10,9 +10,9 @@ export async function GET(
   if (denied) return denied;
   const forbidden = await requireRole(allRoles); if (forbidden) return forbidden;
   const { line } = await params;
-  const divisi = req.nextUrl.searchParams.get("divisi") ?? undefined;
+  const lini = req.nextUrl.searchParams.get("lini") ?? undefined;
   try {
-    return Response.json(await getMaster(line as Line, divisi));
+    return Response.json(await getMaster(line as Line, lini));
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

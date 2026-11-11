@@ -5,7 +5,7 @@ import { formatTanggalID } from "@/lib/date";
 import { useSession } from "next-auth/react";
 
 type Lembur = {
-  id: number; tanggal: string; divisi: string | null; nama: string;
+  id: number; tanggal: string; lini: string | null; nama: string;
   jamMulai: string | null; jamSelesai: string | null; totalJam: number | null;
   alasan: string | null; atasan: string | null; status: string | null; buktiUrl: string | null;
   persetujuanAtasan: string | null;
@@ -63,9 +63,9 @@ export default function LemburList() {
     {error && <p role="alert" className="notice-error mb-4">{error}</p>}
     <div className="table-frame overflow-x-auto">
       <table>
-        <thead><tr>{["Tanggal", "Karyawan", "Divisi", "Waktu", "Alasan", "Atasan", "Persetujuan Atasan", "Status Admin", "Bukti", "Aksi"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+        <thead><tr>{["Tanggal", "Karyawan", "Lini", "Waktu", "Alasan", "Atasan", "Persetujuan Atasan", "Status Admin", "Bukti", "Aksi"].map(label => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>{visibleRows.map(row => <tr key={row.id}>
-          <td>{formatTanggalID(row.tanggal)}</td><td>{row.nama}</td><td>{row.divisi}</td>
+          <td>{formatTanggalID(row.tanggal)}</td><td>{row.nama}</td><td>{row.lini}</td>
           <td>{row.jamMulai}–{row.jamSelesai} ({row.totalJam} jam)</td>
           <td>{row.alasan}</td><td>{row.atasan}</td><td>{row.persetujuanAtasan || "Tidak tercatat"}</td><td><span className={`status-badge ${row.status === "Disetujui" ? "approved" : row.status === "Ditolak" ? "rejected" : "pending"}`}>{row.status || "Menunggu"}</span></td>
           <td>{row.buktiUrl?.startsWith("/api/lembur/bukti/") ? <a href={row.buktiUrl} target="_blank" rel="noreferrer" className="table-action">Lihat</a> : "—"}</td>

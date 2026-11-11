@@ -25,8 +25,8 @@ export function now(): string {
   return new Date().toISOString();
 }
 
-// Replika normalizeDivisi_ (brakeshoe) + normalizeDivisiDiscpad_ (discpad)
-export function normalizeDivisi(line: string, name: string): string {
+// Replika normalizeLini_ (brakeshoe) + normalizeLiniDiscpad_ (discpad)
+export function normalizeLini(line: string, name: string): string {
   let u = clean(name).toUpperCase().replace(/\s+/g, " ").trim();
   if (!u) return "";
 
@@ -63,28 +63,25 @@ export function calcLemburDuration(jamMulai: unknown, jamSelesai: unknown): numb
   return Number(((end - start) / 60).toFixed(2));
 }
 
-// Divisi legacy brakeshoe — dari DIVISI_REMOVED (common.gs) ditambah divisi
-// roster yang tidak punya sheet produksi lagi (MCM, PELEBURAN, POWDER COATING).
-export const DIVISI_REMOVED_BRAKESHOE = [
+// Lini brakeshoe legacy yang tidak lagi digunakan di form produksi.
+export const LINI_REMOVED_BRAKESHOE = [
   "TENSIU CASTING",
   "TENSHU CASTING",
   "BARREL",
   "PACKING HANDLE",
-  "MCM",
   "PELEBURAN",
-  "POWDER COATING",
 ];
 
-// Divisi yang pakai team (operator diambil dari sheet Team, bukan Divisi)
-export const DIVISI_TEAM: Record<string, string[]> = {
+// Lini yang pakai team (operator diambil dari sheet Team, bukan Lini)
+export const LINI_TEAM: Record<string, string[]> = {
   discpad: ["PACKING", "SHOT BLASTING", "PAINTING"],
   brakeshoe: ["SPRAY", "PACKING", "ALODINE & BARREL"],
 };
 
-export function isTeamDivisi(line: string, divisi: string): boolean {
-  const teams = DIVISI_TEAM[line];
+export function isTeamLini(line: string, lini: string): boolean {
+  const teams = LINI_TEAM[line];
   if (!teams) return false;
-  const u = normalizeDivisi(line, divisi);
+  const u = normalizeLini(line, lini);
   return teams.includes(u);
 }
 
@@ -146,15 +143,15 @@ export function parseCellToDate(cell: unknown): Date | null {
   return null;
 }
 
-// Return nama sheet target berdasarkan line, divisi, dan proses
+// Return nama sheet target berdasarkan line, lini, dan proses
 // discpad + PAINTING + proses → "PAINTING 1" atau "PAINTING 2"
-// lainnya → nama divisi uppercase
+// lainnya → nama lini uppercase
 export function getTargetSheetName(
   line: string,
-  divisi: string,
+  lini: string,
   proses?: string
 ): string {
-  const u = normalizeDivisi(line, divisi);
+  const u = normalizeLini(line, lini);
 
   if (line === "discpad" && u === "PAINTING") {
     if (proses === "Painting 1") return "PAINTING 1";
@@ -165,6 +162,6 @@ export function getTargetSheetName(
   return u;
 }
 
-export function isRemovedDivisi(nama: string): boolean {
-  return DIVISI_REMOVED_BRAKESHOE.includes(nama.toUpperCase().trim());
+export function isRemovedLini(nama: string): boolean {
+  return LINI_REMOVED_BRAKESHOE.includes(nama.toUpperCase().trim());
 }

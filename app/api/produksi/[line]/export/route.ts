@@ -13,14 +13,14 @@ export async function GET(
   const { line } = await params;
   const sp = req.nextUrl.searchParams;
 
-  const divisi = sp.get("divisi");
-  if (!divisi) {
-    return Response.json({ error: "Divisi wajib dipilih" }, { status: 400 });
+  const lini = sp.get("lini");
+  if (!lini) {
+    return Response.json({ error: "Lini wajib dipilih" }, { status: 400 });
   }
 
   try {
     const result = await getProductionData(line as Line, {
-      divisi,
+      lini,
       from: sp.get("from"),
       to: sp.get("to"),
       limit: null,
@@ -32,7 +32,7 @@ export async function GET(
     // Add title row
     worksheet.mergeCells(1, 1, 1, result.headers.length);
     const titleCell = worksheet.getCell(1, 1);
-    titleCell.value = `HASIL PRODUKSI - ${line.toUpperCase()} (${divisi})`;
+    titleCell.value = `HASIL PRODUKSI - ${line.toUpperCase()} (${lini})`;
     titleCell.font = { size: 14, bold: true };
     titleCell.alignment = { horizontal: "center" };
 
@@ -129,7 +129,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="hasil-produksi-${line}-${divisi}-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+        "Content-Disposition": `attachment; filename="hasil-produksi-${line}-${lini}-${new Date().toISOString().slice(0, 10)}.xlsx"`,
       },
     });
   } catch (e) {

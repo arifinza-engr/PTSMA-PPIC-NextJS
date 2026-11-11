@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Select, { type StylesConfig } from "react-select";
+import { useSession } from "next-auth/react";
 import { todayWIBISO } from "@/lib/date";
 import { stockSchema } from "@/lib/validation";
 
@@ -55,6 +56,9 @@ const selectStyles: StylesConfig<SelectOption, false> = {
 type StockMaster = { months: { value: number; label: string }[]; years: number[]; codes: string[]; powders: string[]; items: { op: string | null; kode: string | null }[] };
 
 export default function StokOpnameForm() {
+  const { data: session } = useSession();
+  const canInput = session?.user.role === "leader_spv" || session?.user.role === "superadmin";
+  const canCorrect = session?.user.role === "ppic" || session?.user.role === "qc" || session?.user.role === "superadmin";
   const [master, setMaster] = useState<StockMaster | null>(null);
   const [month, setMonth] = useState<number | null>(() => Number(todayWIBISO().slice(5, 7)));
   const [year, setYear] = useState<string | null>(() => todayWIBISO().slice(0, 4));
@@ -62,6 +66,7 @@ export default function StokOpnameForm() {
   const [powder, setPowder] = useState<string | null>(null);
   const [nilaiA, setNilaiA] = useState("");
   const [nilaiB, setNilaiB] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ t: "success" | "error"; v: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [records, setRecords] = useState<StockRecord[]>([]);
@@ -137,8 +142,8 @@ export default function StokOpnameForm() {
     }
     setSubmitting(true);
     try {
-      const r = await fetch("/api/stok-opname", {
-        method: "POST",
+      const r = await fetch(editingId ? `/api/stok-opname/records/${editingId}` : "/api/stok-opname", {
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validation.data),
       });
@@ -147,6 +152,7 @@ export default function StokOpnameForm() {
       setMsg({ t: "success", v: j });
       setNilaiA("");
       setNilaiB("");
+      setEditingId(null);
       await Promise.all([loadRecords(), loadPreview()]);
     } catch (e) {
       setMsg({ t: "error", v: (e as Error).message });
@@ -160,7 +166,7 @@ export default function StokOpnameForm() {
   return (
     <div className="stock-page">
       <div className="page-heading"><div><p className="eyebrow">Inventori / Pencatatan</p><h1>Stok Opname</h1><p>Pilih periode dan identitas produk, lalu catat jumlah grade A dan B.</p></div></div>
-      <form onSubmit={onSubmit} className="space-y-4">
+      {(canInput || editingId !== null) && <form onSubmit={onSubmit} className="space-y-4">
         <div className="form-section-heading"><span>01</span><div><h2>Periode dan produk</h2><p>Pilih bulan, tahun, kode, dan powder coating.</p></div></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
@@ -228,9 +234,10 @@ export default function StokOpnameForm() {
         )}
 
         <button type="submit" disabled={submitting}>
-          {submitting ? "Menyimpan…" : "Simpan"}
+          {submitting ? "Menyimpan…" : editingId ? "Simpan Perubahan" : "Simpan"}
         </button>
-      </form>
+        {editingId && <button type="button" className="action-secondary" onClick={() => { setEditingId(null); setKode(null); setPowder(null); setNilaiA(""); setNilaiB(""); }}>Batal</button>}
+      </form>}
       <section className="data-panel mt-7">
         <div className="data-panel-header"><div><p className="eyebrow">02 / Peninjauan</p><h2>Preview Sheet Bulanan</h2><p>{previewLoading ? "Memuat preview…" : preview?.exists ? `Sheet ${preview.sheetName}` : `Sheet ${preview?.sheetName || "periode ini"} belum ada. Sheet dibuat otomatis saat entri pertama disimpan.`}</p></div><button type="button" onClick={loadPreview} disabled={!month || !year || previewLoading} className="action-secondary">Refresh preview</button></div>
         {preview?.headers.length ? <div className="table-frame overflow-x-auto"><table><thead><tr>{preview.headers.map((header, index) => <th key={`${header}-${index}`}>{header}</th>)}</tr></thead><tbody>
@@ -244,11 +251,11 @@ export default function StokOpnameForm() {
         </tr></thead><tbody>{records.map(record => <tr key={record.id}>
           <td>{record.op}</td><td>{record.kode}</td><td>{record.type}</td><td>{record.powder}</td>
           <td>{record.gradeA}</td><td>{record.gradeB}</td>
-          <td><button type="button" onClick={() => {
-            setKode(record.kode); setPowder(record.powder);
+          <td>{canCorrect && <><button type="button" onClick={() => {
+            setEditingId(record.id); setKode(record.kode); setPowder(record.powder);
             setNilaiA(String(record.gradeA)); setNilaiB(String(record.gradeB));
             window.scrollTo({ top: 0, behavior: "smooth" });
-          }}>Ubah</button><button type="button" onClick={() => deleteRecord(record.id)}>Hapus</button></td>
+          }}>Ubah</button><button type="button" onClick={() => deleteRecord(record.id)}>Hapus</button></>}</td>
         </tr>)}</tbody></table></div>
         {!records.length && <p className="empty-inline">Pilih periode dan tekan “Tampilkan data” untuk melihat entri stok.</p>}
       </section>

@@ -19,7 +19,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const denied = requireSameOrigin(req);
   if (denied) return denied;
   const forbidden = await requireRole(allRoles); if (forbidden) return forbidden;
-  try { return Response.json(await getProductionRecord(recordId((await params).id))); }
+  try {
+    const line = lineSchema.parse(req.nextUrl.searchParams.get("line"));
+    return Response.json(await getProductionRecord(recordId((await params).id), line));
+  }
   catch (error) { return errorResponse(error); }
 }
 
@@ -29,8 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const forbidden = await requireRole(["ppic", "qc"]); if (forbidden) return forbidden;
   try {
     const id = recordId((await params).id);
-    const record = await getProductionRecord(id);
-    const line = lineSchema.parse(record.line);
+    const line = lineSchema.parse(req.nextUrl.searchParams.get("line"));
     return Response.json(await updateProductionRecord(id, line, parseProduction(await req.json())));
   } catch (error) { return errorResponse(error); }
 }
@@ -39,6 +41,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const denied = requireSameOrigin(req);
   if (denied) return denied;
   const forbidden = await requireRole(["ppic", "qc"]); if (forbidden) return forbidden;
-  try { return Response.json(await deleteProductionRecord(recordId((await params).id))); }
+  try {
+    const line = lineSchema.parse(req.nextUrl.searchParams.get("line"));
+    return Response.json(await deleteProductionRecord(recordId((await params).id), line));
+  }
   catch (error) { return errorResponse(error); }
 }

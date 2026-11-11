@@ -20,7 +20,13 @@ export async function requireRole(allowed: readonly AppRole[]): Promise<Response
 export function sameRequestOrigin(req: NextRequest): boolean {
   const origin = req.headers.get("origin") ?? req.headers.get("referer");
   if (!origin) return false;
-  try { return new URL(origin).origin === req.nextUrl.origin; }
+  try {
+    const requestOrigin = new URL(origin).origin;
+    const allowedOrigins = new Set([req.nextUrl.origin]);
+    const configuredUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+    if (configuredUrl) allowedOrigins.add(new URL(configuredUrl).origin);
+    return allowedOrigins.has(requestOrigin);
+  }
   catch { return false; }
 }
 

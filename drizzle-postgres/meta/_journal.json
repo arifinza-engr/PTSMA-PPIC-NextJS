@@ -22,6 +22,76 @@
       "when": 1793611962216,
       "tag": "0002_lethal_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793758792952,
+      "tag": "0003_rename_product_line_to_jenis_produk",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793758877700,
+      "tag": "0004_rename_jenis_produk_sequence_and_primary_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793759430299,
+      "tag": "0005_rename_divisi_to_lini_and_add_handle_position",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793759999174,
+      "tag": "0006_split_product_masters_by_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793845442589,
+      "tag": "0007_one_table_per_production_form",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793846066793,
+      "tag": "0008_employee_only_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793846336303,
+      "tag": "0009_employee_form_category",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793847266897,
+      "tag": "0010_rename_employee_category_to_divisi",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793927384539,
+      "tag": "0011_black_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793941173561,
+      "tag": "0012_curly_strong_guy",
+      "breakpoints": true
     }
   ]
 }

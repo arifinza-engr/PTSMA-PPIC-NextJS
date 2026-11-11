@@ -1,60 +1,32 @@
-import { pgTable, serial, integer, text, index, uniqueIndex, primaryKey, doublePrecision } from "drizzle-orm/pg-core"
-
-export const productLine = pgTable("product_line", {
-	id: serial().primaryKey(),
-	nama: text().notNull(),
-	label: text(),
-	urutan: integer().default(0).notNull(),
-});
-
-export const divisi = pgTable("divisi", {
-	id: serial().primaryKey(),
-	productLineId: integer("product_line_id").notNull().references(() => productLine.id, { onDelete: "cascade" } ),
-	nama: text().notNull(),
-	isCasting: integer("is_casting").default(0).notNull(),
-	isTeam: integer("is_team").default(0).notNull(),
-	hasNg: integer("has_ng").default(0).notNull(),
-	hasMerk: integer("has_merk").default(0).notNull(),
-	hasCat: integer("has_cat").default(0).notNull(),
-	hasMesin: integer("has_mesin").default(0).notNull(),
-	hasNgB: integer("has_ng_b").default(0).notNull(),
-	urutan: integer().default(0).notNull(),
-});
+import { pgTable, serial, integer, text, index, uniqueIndex, doublePrecision, jsonb } from "drizzle-orm/pg-core"
 
 export const karyawan = pgTable("karyawan", {
 	id: serial().primaryKey(),
 	nama: text().notNull(),
-	divisiId: integer("divisi_id").references(() => divisi.id, { onDelete: "set null" } ),
+	lini: text(),
 	jabatan: text().default("operator").notNull(),
 	isActive: integer("is_active").default(1).notNull(),
 },
 (table) => [
-	index("idx_karyawan_divisi").on(table.divisiId, table.nama),
+	index("idx_karyawan_lini_nama").on(table.lini, table.nama),
 ]);
 
-export const product = pgTable("product", {
+export const productionTarget = pgTable("production_target", {
 	id: serial().primaryKey(),
-	productLineId: integer("product_line_id").references(() => productLine.id, { onDelete: "set null" } ),
-	type: text(),
-	grade: text(),
-	kulit: text(),
-	namaBarang: text("nama_barang"),
-	warna: text(),
-	op: text(),
-	kode: text(),
-	namaType: text("nama_type"),
-	tebal: text(),
-	powderCoating: text("powder_coating"),
-},
-(table) => [
-	index("idx_product_powder").on(table.powderCoating),
-	index("idx_product_kode").on(table.kode),
+	produk: text().notNull(),
+	lini: text().notNull(),
+	shift: text().notNull(),
+	basis: text().notNull(),
+	satuan: text().notNull(),
+	nilai: doublePrecision().notNull(),
+}, (table) => [
+	uniqueIndex("idx_production_target_unique").on(table.produk, table.lini, table.shift, table.satuan),
+	index("idx_production_target_line_shift").on(table.produk, table.lini, table.shift),
 ]);
 
-export const produksi = pgTable("produksi", {
+const productionFormColumns = () => ({
 	id: serial().primaryKey(),
-	productLineId: integer("product_line_id").notNull().references(() => productLine.id),
-	divisiId: integer("divisi_id").notNull().references(() => divisi.id),
+	lini: text().notNull(),
 	tanggal: text().notNull(),
 	shift: text().default("-").notNull(),
 	jamKerja: text("jam_kerja").default("-").notNull(),
@@ -62,52 +34,29 @@ export const produksi = pgTable("produksi", {
 	proses: text(),
 	requestHash: text("request_hash"),
 	qtyTotal: integer("qty_total"),
+	operators: jsonb().$type<string[]>().notNull().default([]),
+	items: jsonb().$type<Record<string, string | number | null>[]>().notNull().default([]),
 	createdBy: integer("created_by"),
 	createdAt: text("created_at").notNull(),
 	updatedAt: text("updated_at"),
-},
-(table) => [
-	index("idx_produksi_divisi").on(table.divisiId),
-	index("idx_produksi_tanggal").on(table.tanggal),
-	index("idx_produksi_request_hash").on(table.requestHash, table.createdAt),
+});
+
+export const produksiBrakeshoe = pgTable("produksi_brakeshoe", productionFormColumns(), (table) => [
+	index("idx_produksi_brakeshoe_tanggal").on(table.tanggal),
+	index("idx_produksi_brakeshoe_lini_tanggal").on(table.lini, table.tanggal),
+	index("idx_produksi_brakeshoe_request_hash").on(table.requestHash, table.createdAt),
 ]);
 
-export const produksiOperator = pgTable("produksi_operator", {
-	produksiId: integer("produksi_id").notNull().references(() => produksi.id, { onDelete: "cascade" } ),
-	karyawanId: integer("karyawan_id").notNull().references(() => karyawan.id),
-	urutan: integer().default(0).notNull(),
-},
-(table) => [
-	primaryKey({ columns: [table.produksiId, table.karyawanId], name: "produksi_operator_produksi_id_karyawan_id_pk"})
+export const produksiDiscpad = pgTable("produksi_discpad", productionFormColumns(), (table) => [
+	index("idx_produksi_discpad_tanggal").on(table.tanggal),
+	index("idx_produksi_discpad_lini_tanggal").on(table.lini, table.tanggal),
+	index("idx_produksi_discpad_request_hash").on(table.requestHash, table.createdAt),
 ]);
 
-export const produksiItem = pgTable("produksi_item", {
-	id: serial().primaryKey(),
-	produksiId: integer("produksi_id").notNull().references(() => produksi.id, { onDelete: "cascade" } ),
-	urutan: integer().default(0).notNull(),
-	productId: integer("product_id").references(() => product.id, { onDelete: "set null" } ),
-	type: text(),
-	grade: text(),
-	kulit: text(),
-	merk: text(),
-	kode: text(),
-	gradeAb: text("grade_ab"),
-	tebal: text(),
-	cat: text(),
-	namaBarang: text("nama_barang"),
-	warna: text(),
-	qty: integer().default(0).notNull(),
-	ng: integer(),
-	ngB: integer("ng_b"),
-	mesin: text(),
-	qtyShot: integer("qty_shot"),
-	qtySet: integer("qty_set"),
-	qtyPcs: integer("qty_pcs"),
-	qtyKg: doublePrecision("qty_kg"),
-	createdAt: text("created_at"),
-},
-(table) => [
-	index("idx_produksi_item_produksi").on(table.produksiId),
+export const produksiHandle = pgTable("produksi_handle", productionFormColumns(), (table) => [
+	index("idx_produksi_handle_tanggal").on(table.tanggal),
+	index("idx_produksi_handle_lini_tanggal").on(table.lini, table.tanggal),
+	index("idx_produksi_handle_request_hash").on(table.requestHash, table.createdAt),
 ]);
 
 export const stokOpname = pgTable("stok_opname", {
@@ -130,8 +79,7 @@ export const stokOpname = pgTable("stok_opname", {
 export const lembur = pgTable("lembur", {
 	id: serial().primaryKey(),
 	tanggal: text().notNull(),
-	divisi: text(),
-	divisiId: integer("divisi_id").references(() => divisi.id, { onDelete: "set null" } ),
+	lini: text(),
 	nama: text().notNull(),
 	karyawanId: integer("karyawan_id").references(() => karyawan.id, { onDelete: "set null" } ),
 	jamMulai: text("jam_mulai"),

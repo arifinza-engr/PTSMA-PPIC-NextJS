@@ -9,19 +9,19 @@ const decimal = z.coerce.number().finite().min(0).max(1_000_000_000);
 const item = z.object({
   type: text().optional(), grade: text().optional(), kulit: text().optional(), merk: text().optional(),
   kode: text().optional(), ab: text().optional(), cat: text().optional(), tebal: text().optional(),
-  namaBarang: text().optional(), warna: text().optional(),
+  typeHandle: text().optional(), posisiHandle: text().optional(), warna: text().optional(),
   qty: nonnegative.optional(), ng: nonnegative.optional(), ngA: nonnegative.optional(), ngB: nonnegative.optional(),
 });
 
 export const lineSchema = z.enum(["brakeshoe", "discpad", "handle"]);
 
 export const productionSchema = z.object({
-  divisi: text().min(1), tanggal: date, shift: text(50).optional(),
+  lini: text().min(1), tanggal: date, shift: text(50).optional(),
   jam: text(50).optional(), jamKerja: text(50).optional(), keterangan: text(2000).optional(),
   operator: text().optional(), anggotaTim: z.array(text().min(1)).max(100).optional(),
   mesin: text().optional(), proses: z.enum(["Painting 1", "Painting 2"]).optional(),
   jumlahProduksi: nonnegative.optional(), hasilProduksi: nonnegative.optional(),
-  jumlahShot: nonnegative.optional(), jumlahSet: nonnegative.optional(),
+  jumlahShot: z.union([z.null(), nonnegative]).optional(), jumlahSet: z.union([z.null(), decimal]).optional(),
   jumlahPcs: nonnegative.optional(), jumlahKg: decimal.optional(),
   items: z.array(item).min(1).max(100),
 });
@@ -35,7 +35,7 @@ export const stockSchema = z.object({
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Jam harus berformat HH:MM.");
 export const overtimeSchema = z.object({
-  tanggal: date, divisi: text().min(1), nama: text().min(1),
+  tanggal: date, lini: text().min(1), nama: text().min(1),
   jamMulai: time, jamSelesai: time, alasan: text(2000).min(1),
   atasan: text().min(1), persetujuanAtasan: z.enum(["Sudah Disetujui", "Belum Disetujui"]),
   pernyataan: text(2000).optional(),

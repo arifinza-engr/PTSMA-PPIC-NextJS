@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { getLemburList, getLemburNamaByDivisi, submitLembur } from "@/lib/lembur";
+import { getLemburList, getLemburNamaByLini, submitLembur } from "@/lib/lembur";
 import { allRoles, requireRole, requireSameOrigin } from "@/lib/authorize";
 import { parseOvertime } from "@/lib/validation";
 
@@ -8,9 +8,9 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   const list = req.nextUrl.searchParams.get("list") === "1";
   const forbidden = await requireRole(list ? ["hrd", "pimpinan"] : allRoles); if (forbidden) return forbidden;
-  const divisi = req.nextUrl.searchParams.get("divisi") ?? "";
+  const lini = req.nextUrl.searchParams.get("lini") ?? "";
   try {
-    return Response.json(await (list ? getLemburList() : getLemburNamaByDivisi(divisi)));
+    return Response.json(await (list ? getLemburList() : getLemburNamaByLini(lini)));
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

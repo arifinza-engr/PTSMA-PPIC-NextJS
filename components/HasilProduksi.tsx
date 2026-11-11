@@ -60,7 +60,7 @@ interface DataResult {
   rows: Cell[][];
   total: number;
   limited: boolean;
-  divisi: string | null;
+  lini: string | null;
   recordIds: number[];
 }
 
@@ -128,17 +128,17 @@ function formatCell(val: Cell, header: string): string {
 
 export default function HasilProduksi({
   initialLine = "brakeshoe",
-  initialDivisi = "",
+  initialLini = "",
   initialFrom = "",
   initialTo = "",
 }: {
   initialLine?: Line;
-  initialDivisi?: string;
+  initialLini?: string;
   initialFrom?: string;
   initialTo?: string;
 }) {
   const line = useProductionReportStore((state) => state.line);
-  const divisi = useProductionReportStore((state) => state.divisi);
+  const lini = useProductionReportStore((state) => state.lini);
   const from = useProductionReportStore((state) => state.from);
   const to = useProductionReportStore((state) => state.to);
   const appliedFilters = useProductionReportStore((state) => state.appliedFilters);
@@ -146,7 +146,7 @@ export default function HasilProduksi({
   const pagination = useProductionReportStore((state) => state.pagination);
   const sorting = useProductionReportStore((state) => state.sorting);
   const setLine = useProductionReportStore((state) => state.setLine);
-  const setDivisi = useProductionReportStore((state) => state.setDivisi);
+  const setLini = useProductionReportStore((state) => state.setLini);
   const setFrom = useProductionReportStore((state) => state.setFrom);
   const setTo = useProductionReportStore((state) => state.setTo);
   const applyFilters = useProductionReportStore((state) => state.applyFilters);
@@ -162,8 +162,8 @@ export default function HasilProduksi({
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    initialize({ line: initialLine, divisi: initialDivisi, from: initialFrom, to: initialTo });
-  }, [initialLine, initialDivisi, initialFrom, initialTo, initialize]);
+    initialize({ line: initialLine, lini: initialLini, from: initialFrom, to: initialTo });
+  }, [initialLine, initialLini, initialFrom, initialTo, initialize]);
 
   const queryClient = useQueryClient();
   const masterQuery = useQuery({
@@ -172,16 +172,16 @@ export default function HasilProduksi({
       const response = await fetch(`/api/produksi/${line}/master`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Gagal memuat master produksi.");
-      return (body.divisiOptions ?? []) as string[];
+      return (body.liniOptions ?? []) as string[];
     },
   });
-  const divisis = masterQuery.data ?? [];
+  const linis = masterQuery.data ?? [];
   const dataQuery = useQuery<DataResult>({
     queryKey: ["production-data", appliedFilters],
     enabled: appliedFilters !== null,
     queryFn: async () => {
       if (!appliedFilters) throw new Error("Filter laporan belum dipilih.");
-      const qs = new URLSearchParams({ divisi: appliedFilters.divisi });
+      const qs = new URLSearchParams({ lini: appliedFilters.lini });
       if (appliedFilters.from) qs.set("from", appliedFilters.from);
       if (appliedFilters.to) qs.set("to", appliedFilters.to);
       const response = await fetch(`/api/produksi/${appliedFilters.line}/data?${qs}`);
@@ -196,18 +196,18 @@ export default function HasilProduksi({
     || (masterQuery.error instanceof Error ? masterQuery.error.message : "")
     || exportError;
   const load = () => {
-    if (!divisi) return;
+    if (!lini) return;
     setPagination((current) => ({ ...current, pageIndex: 0 }));
-    applyFilters({ line, divisi, from, to });
+    applyFilters({ line, lini, from, to });
   };
 
   async function exportExcel() {
-    if (!divisi) return;
+    if (!lini) return;
     setExporting(true);
     setExportError("");
 
     try {
-      const qs = new URLSearchParams({ divisi });
+      const qs = new URLSearchParams({ lini });
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
 
@@ -218,7 +218,7 @@ export default function HasilProduksi({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `hasil-produksi-${line}-${divisi}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `hasil-produksi-${line}-${lini}-${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -232,7 +232,7 @@ export default function HasilProduksi({
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/produksi/record/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/produksi/record/${id}?line=${line}`, { method: "DELETE" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Gagal menghapus laporan.");
       return body;
@@ -329,8 +329,8 @@ export default function HasilProduksi({
             Hasil Produksi
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Telusuri, periksa, dan ekspor catatan produksi berdasarkan lini,
-            divisi, dan periode.
+            Telusuri, periksa, dan ekspor catatan produksi berdasarkan produk,
+            lini, dan periode.
           </p>
         </div>
         {data && (
@@ -352,13 +352,13 @@ export default function HasilProduksi({
           <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(150px,.8fr)_minmax(190px,1.1fr)_minmax(155px,.8fr)_minmax(155px,.8fr)_auto]">
             <div className="min-w-0">
               <Label className="mb-1.5 block">
-                Lini
+                Produk
               </Label>
               <Select
                 value={line}
                 onChange={(e) => {
                   setLine(e.target.value as Line);
-                  setDivisi("");
+                  setLini("");
                   clearAppliedFilters();
                   setPagination((current) => ({ ...current, pageIndex: 0 }));
                 }}
@@ -371,14 +371,14 @@ export default function HasilProduksi({
 
             <div className="min-w-0">
               <Label className="mb-1.5 block">
-                Divisi
+                Lini
               </Label>
               <Select
-                value={divisi}
-                onChange={(e) => setDivisi(e.target.value)}
+                value={lini}
+                onChange={(e) => setLini(e.target.value)}
               >
-                <option value="">-- Pilih Divisi --</option>
-                {divisis.map((d) => (
+                <option value="">-- Pilih Lini --</option>
+                {linis.map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -412,7 +412,7 @@ export default function HasilProduksi({
 
             <Button
               onClick={load}
-              disabled={loading || !divisi}
+              disabled={loading || !lini}
               className="w-full xl:w-auto"
             >
               {loading ? "Memuat..." : "Tampilkan"}
@@ -463,9 +463,9 @@ export default function HasilProduksi({
           <Card className="mb-4 border-border/80 shadow-sm">
             <CardContent className="flex min-h-24 flex-wrap items-center justify-between gap-4 p-4 pb-2">
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {data.divisi && (
+                {data.lini && (
                   <span className="font-semibold text-foreground">
-                    {data.divisi}
+                    {data.lini}
                   </span>
                 )}
                 {" - "}
@@ -700,7 +700,7 @@ export default function HasilProduksi({
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
             />
           </svg>
-          <p className="m-0 text-sm">Pilih divisi dan klik &quot;Tampilkan&quot; untuk melihat data</p>
+          <p className="m-0 text-sm">Pilih lini dan klik &quot;Tampilkan&quot; untuk melihat data</p>
         </Card>
       )}
     </div>

@@ -2,11 +2,11 @@ import { create } from "zustand";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 
 type Line = "brakeshoe" | "discpad" | "handle";
-type AppliedFilters = { line: Line; divisi: string; from: string; to: string } | null;
+type AppliedFilters = { line: Line; lini: string; from: string; to: string } | null;
 
 interface ProductionReportState {
   line: Line;
-  divisi: string;
+  lini: string;
   from: string;
   to: string;
   appliedFilters: AppliedFilters;
@@ -14,7 +14,7 @@ interface ProductionReportState {
   pagination: PaginationState;
   sorting: SortingState;
   setLine: (line: Line) => void;
-  setDivisi: (divisi: string) => void;
+  setLini: (lini: string) => void;
   setFrom: (from: string) => void;
   setTo: (to: string) => void;
   applyFilters: (filters: NonNullable<AppliedFilters>) => void;
@@ -22,12 +22,12 @@ interface ProductionReportState {
   setSearchQuery: (searchQuery: string) => void;
   setPagination: (updater: PaginationState | ((current: PaginationState) => PaginationState)) => void;
   setSorting: (updater: SortingState | ((current: SortingState) => SortingState)) => void;
-  initialize: (values: { line: Line; divisi: string; from: string; to: string }) => void;
+  initialize: (values: { line: Line; lini: string; from: string; to: string }) => void;
 }
 
 export const useProductionReportStore = create<ProductionReportState>((set) => ({
   line: "brakeshoe",
-  divisi: "",
+  lini: "",
   from: "",
   to: "",
   appliedFilters: null,
@@ -35,7 +35,7 @@ export const useProductionReportStore = create<ProductionReportState>((set) => (
   pagination: { pageIndex: 0, pageSize: 25 },
   sorting: [],
   setLine: (line) => set({ line }),
-  setDivisi: (divisi) => set({ divisi }),
+  setLini: (lini) => set({ lini }),
   setFrom: (from) => set({ from }),
   setTo: (to) => set({ to }),
   applyFilters: (filters) => set({ appliedFilters: filters }),
@@ -49,6 +49,6 @@ export const useProductionReportStore = create<ProductionReportState>((set) => (
   })),
   initialize: (values) => set((state) => ({
     ...values,
-    appliedFilters: state.appliedFilters ?? (values.divisi ? values : null),
+    appliedFilters: state.appliedFilters ?? (values.lini ? values : null),
   })),
 }));

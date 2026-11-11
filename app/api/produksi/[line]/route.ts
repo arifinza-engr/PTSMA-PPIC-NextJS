@@ -19,7 +19,7 @@ export async function GET(
   try {
     return Response.json(
       await getProductionData(line as Line, {
-        divisi: sp.get("divisi"),
+        lini: sp.get("lini"),
         from: sp.get("from"),
         to: sp.get("to"),
         limit: sp.has("limit") ? sp.get("limit") : undefined,

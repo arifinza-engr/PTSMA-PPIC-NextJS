@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { todayWIBISO, formatTanggalID } from "@/lib/date";
+import { auth } from "@/auth";
+import ExecutiveDashboard from "@/components/ExecutiveDashboard";
 
 const productionProducts = [
   {
@@ -64,10 +66,16 @@ const administrationLinks = [
     icon: BsClockHistory,
   },
   {
-    title: "Master Data",
-    detail: "Kelola karyawan, produk, dan divisi",
+    title: "Master Karyawan",
+    detail: "Kelola data karyawan",
     href: "/master",
     icon: BsGear,
+  },
+  {
+    title: "Target Produksi",
+    detail: "Atur target per lini dan shift",
+    href: "/target-produksi",
+    icon: BsTable,
   },
 ];
 
@@ -119,7 +127,29 @@ function TaskLinks({ items }: { items: typeof operationalLinks }) {
   );
 }
 
-export default function Dashboard() {
+export default async function Dashboard() {
+  const session = await auth();
+  const role = session?.user.role;
+  const canInput = role === "leader_spv" || role === "superadmin";
+  const canCorrectStock = role === "ppic" || role === "qc" || role === "superadmin";
+  const canReviewOvertime = role === "hrd" || role === "pimpinan" || role === "superadmin";
+  const canManage = role === "superadmin";
+  const canManageTargets = canManage || role === "ppic";
+  const visibleOperationalLinks = operationalLinks.filter(({ href }) =>
+    href === "/hasil-produksi" || (href === "/stok-opname" ? canInput || canCorrectStock : canInput),
+  );
+  const visibleAdministrationLinks = [
+    ...(canReviewOvertime
+      ? [{
+          ...administrationLinks[0],
+          title: role === "pimpinan" ? "Daftar Lembur" : "Persetujuan Lembur",
+          detail: role === "pimpinan" ? "Lihat pengajuan lembur" : "Tinjau dan proses pengajuan lembur",
+        }]
+      : []),
+    ...(canManage ? [administrationLinks[1]] : []),
+    ...(canManageTargets ? [administrationLinks[2]] : []),
+  ];
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 sm:space-y-10">
       <header className="flex flex-col gap-3 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -140,7 +170,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <section className="space-y-4" aria-labelledby="production-title">
+      {(role === "pimpinan" || role === "superadmin") && <ExecutiveDashboard />}
+
+      {canInput && <section className="space-y-4" aria-labelledby="production-title">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div className="space-y-1">
             <h2
@@ -187,7 +219,7 @@ export default function Dashboard() {
             </Link>
           ))}
         </div>
-      </section>
+      </section>}
 
       <section className="space-y-4" aria-labelledby="operations-title">
         <SectionHeading
@@ -195,17 +227,17 @@ export default function Dashboard() {
           title="Operasional"
           description="Laporan produksi, persediaan, dan pengajuan lembur."
         />
-        <TaskLinks items={operationalLinks} />
+        <TaskLinks items={visibleOperationalLinks} />
       </section>
 
-      <section className="space-y-4" aria-labelledby="administration-title">
+      {visibleAdministrationLinks.length > 0 && <section className="space-y-4" aria-labelledby="administration-title">
         <SectionHeading
           id="administration-title"
           title="Administrasi"
           description="Persetujuan pengajuan dan pengelolaan data referensi."
         />
-        <TaskLinks items={administrationLinks} />
-      </section>
+        <TaskLinks items={visibleAdministrationLinks} />
+      </section>}
     </div>
   );
 }

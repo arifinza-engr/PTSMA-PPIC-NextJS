@@ -9,7 +9,7 @@ import { productionSchema } from "@/lib/validation";
 
 type Line = "brakeshoe" | "discpad" | "handle";
 type Item = Record<string, string>;
-type DivisionFlags = {
+type LiniFlags = {
   nama: string;
   isCasting: number;
   isTeam: number;
@@ -19,8 +19,8 @@ type DivisionFlags = {
   hasNgB: number;
 };
 type MasterData = {
-  divisiOptions: string[];
-  divisis: DivisionFlags[];
+  liniOptions: string[];
+  linis: LiniFlags[];
   productOptions: {
     types?: string[];
     grades?: string[];
@@ -28,7 +28,9 @@ type MasterData = {
     codes?: string[];
     coatings?: string[];
     tebals?: string[];
-    namaBarangs?: string[];
+    typeHandles?: string[];
+    posisiHandles?: string[];
+    abOptions?: string[];
     warnas?: string[];
   };
 };
@@ -97,7 +99,8 @@ const EMPTY: Item = {
   ab: "",
   cat: "",
   tebal: "",
-  namaBarang: "",
+  typeHandle: "",
+  posisiHandle: "",
   warna: "",
   qty: "",
   ng: "",
@@ -120,7 +123,7 @@ function num(v: string): number {
 
 function columnsFor(
   line: Line,
-  flags: Partial<DivisionFlags>,
+  flags: Partial<LiniFlags>,
   master: MasterData | null,
 ): Col[] {
   const po = master?.productOptions;
@@ -144,7 +147,7 @@ function columnsFor(
   if (line === "discpad") {
     const cols: Col[] = [{ key: "kode", label: "Kode", opts: po?.codes ?? [] }];
     if (flags.nama !== "PACKING")
-      cols.push({ key: "ab", label: "A/B", opts: ["A", "B"] });
+      cols.push({ key: "ab", label: "A/B", opts: po?.abOptions ?? [] });
     if (flags.hasCat)
       cols.push({ key: "cat", label: "Cat", opts: po?.coatings ?? [] });
     cols.push({ key: "tebal", label: "Tebal", opts: po?.tebals ?? [] });
@@ -159,7 +162,8 @@ function columnsFor(
   }
   // handle
   const base: Col[] = [
-    { key: "namaBarang", label: "Nama Barang", opts: po?.namaBarangs ?? [] },
+    { key: "typeHandle", label: "Type Handle", opts: po?.typeHandles ?? [] },
+    { key: "posisiHandle", label: "Posisi Handle", opts: po?.posisiHandles ?? [] },
     { key: "warna", label: "Warna", opts: po?.warnas ?? [] },
   ];
   if (flags.isCasting) return base;
@@ -179,7 +183,7 @@ export default function ProduksiForm({
 }) {
   const [master, setMaster] = useState<MasterData | null>(null);
   const [loadErr, setLoadErr] = useState("");
-  const [divisi, setDivisi] = useState("");
+  const [lini, setLini] = useState("");
   const [operator, setOperator] = useState("");
   const [anggota, setAnggota] = useState<string[]>([]);
   const [tanggal, setTanggal] = useState(() => todayWIBISO());
@@ -215,9 +219,9 @@ export default function ProduksiForm({
     })();
   }, [line]);
 
-  const flags: Partial<DivisionFlags> = useMemo(
-    () => (master?.divisis || []).find((d) => d.nama === divisi) || {},
-    [master, divisi],
+  const flags: Partial<LiniFlags> = useMemo(
+    () => (master?.linis || []).find((d) => d.nama === lini) || {},
+    [master, lini],
   );
   const isCasting = !!flags.isCasting;
   const isTeam = !!flags.isTeam;
@@ -227,25 +231,25 @@ export default function ProduksiForm({
   );
 
   useEffect(() => {
-    if (!divisi) return;
+    if (!lini) return;
     (async () => {
       const r = await fetch(
-        `/api/produksi/${line}/operators?divisi=${encodeURIComponent(divisi)}`,
+        `/api/produksi/${line}/operators?lini=${encodeURIComponent(lini)}`,
       );
       setOpts(r.ok ? await r.json() : []);
     })();
-  }, [divisi, line]);
+  }, [lini, line]);
 
   useEffect(() => {
     if (!editId || !master) return;
     (async () => {
       try {
-        const response = await fetch(`/api/produksi/record/${editId}`);
+        const response = await fetch(`/api/produksi/record/${editId}?line=${line}`);
         const record = await response.json();
         if (!response.ok)
           throw new Error(record.error || "Gagal membuka laporan.");
-        if (record.line !== line) throw new Error("Lini laporan tidak cocok.");
-        setDivisi(record.divisi);
+        if (record.line !== line) throw new Error("Jenis produk laporan tidak cocok.");
+        setLini(record.lini);
         setTanggal(record.header.tanggal);
         setShift(record.header.shift);
         setJam(record.header.jamKerja === "-" ? "" : record.header.jamKerja);
@@ -270,9 +274,8 @@ export default function ProduksiForm({
             ab: String(item.gradeAb ?? ""),
             cat: String(item.cat ?? ""),
             tebal: String(item.tebal ?? ""),
-            namaBarang: String(
-              item.namaBarang ?? (line === "handle" ? (item.type ?? "") : ""),
-            ),
+            typeHandle: String(item.typeHandle ?? (line === "handle" ? (item.type ?? "") : "")),
+            posisiHandle: String(item.posisiHandle ?? ""),
             warna: String(item.warna ?? ""),
             qty: String(item.qty ?? ""),
             ng: String(item.ng ?? ""),
@@ -305,7 +308,7 @@ export default function ProduksiForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (!divisi) return setMsg({ t: "error", v: "Divisi wajib dipilih." });
+    if (!lini) return setMsg({ t: "error", v: "Lini wajib dipilih." });
     if (!tanggal) return setMsg({ t: "error", v: "Tanggal wajib diisi." });
 
     let operatorVal = "";
@@ -348,18 +351,19 @@ export default function ProduksiForm({
     } else {
       payloadItems = (isCasting ? [items[0]] : items)
         .map((i) => ({
-          namaBarang: i.namaBarang,
+          typeHandle: i.typeHandle,
+          posisiHandle: i.posisiHandle,
           warna: i.warna,
           qty: num(i.qty),
           ng: num(i.ng),
         }))
-        .filter((i) => i.namaBarang || i.warna || i.qty || i.ng);
+        .filter((i) => i.typeHandle || i.posisiHandle || i.warna || i.qty || i.ng);
     }
     if (!payloadItems.length)
       return setMsg({ t: "error", v: "Detail produksi minimal 1 item." });
     if (
       line === "discpad" &&
-      divisi === "PACKING" &&
+      lini === "PACKING" &&
       Number(jumlahProduksi) <= 0
     ) {
       return setMsg({
@@ -369,7 +373,7 @@ export default function ProduksiForm({
     }
 
     const payload: Record<string, unknown> = {
-      divisi,
+      lini,
       tanggal,
       shift,
       jam,
@@ -382,14 +386,17 @@ export default function ProduksiForm({
       payload.mesin = mesin;
       payload.jumlahShot = num(shot);
       payload.jumlahSet = num(setv);
-      if (line === "brakeshoe") {
+      if (line === "brakeshoe" || line === "handle") {
         payload.jumlahPcs = num(pcs);
         payload.jumlahKg = num(kg);
       }
     }
     if (line === "discpad") {
-      if (divisi === "PAINTING") payload.proses = proses;
+      if (lini === "PAINTING") payload.proses = proses;
       payload.jumlahProduksi = num(jumlahProduksi);
+      if (jumlahProduksi === "") return setMsg({ t: "error", v: "Jumlah Produksi (PCS) wajib diisi." });
+      if (lini === "PRESS CETAK") payload.jumlahShot = shot === "" ? null : num(shot);
+      else payload.jumlahSet = jumlahProduksi === "" ? null : Number(jumlahProduksi) / 2;
     }
 
     const validation = productionSchema.safeParse(payload);
@@ -403,7 +410,7 @@ export default function ProduksiForm({
     setSubmitting(true);
     try {
       const r = await fetch(
-        editId ? `/api/produksi/record/${editId}` : `/api/produksi/${line}`,
+        editId ? `/api/produksi/record/${editId}?line=${line}` : `/api/produksi/${line}`,
         {
           method: editId ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -459,24 +466,26 @@ export default function ProduksiForm({
           <div>
             <h2>Informasi laporan</h2>
             <p>
-              Pilih divisi lebih dulu agar operator dan detail yang sesuai
+              Pilih lini lebih dulu agar operator dan detail yang sesuai
               tersedia.
             </p>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <label className="block">
-            <span className="text-sm font-medium">Divisi</span>
+            <span className="text-sm font-medium">Lini</span>
             <Select
-              options={toOptions(master?.divisiOptions || [])}
-              value={divisi ? { value: divisi, label: divisi } : null}
+              options={toOptions(master?.liniOptions || [])}
+              value={lini ? { value: lini, label: lini } : null}
               onChange={(opt) => {
-                setDivisi(opt?.value || "");
+                setLini(opt?.value || "");
                 setOperator("");
                 setAnggota([]);
                 setOpts([]);
+                setJumlahProduksi("");
+                setShot("");
               }}
-              placeholder="-- Pilih Divisi --"
+              placeholder="-- Pilih Lini --"
               isSearchable
               className="mt-1"
               styles={selectStyles}
@@ -534,7 +543,7 @@ export default function ProduksiForm({
             />
           </label>
 
-          {line === "discpad" && divisi === "PAINTING" && (
+          {line === "discpad" && lini === "PAINTING" && (
             <label className="block">
               <span className="text-sm font-medium">Proses</span>
               <select
@@ -548,19 +557,44 @@ export default function ProduksiForm({
             </label>
           )}
 
-          {line === "discpad" && divisi && (
-            <label className="block">
-              <span className="text-sm font-medium">
-                Jumlah Produksi ({divisi === "PACKING" ? "SET" : "PCS"})
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={jumlahProduksi}
-                onChange={(e) => setJumlahProduksi(e.target.value)}
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
-              />
-            </label>
+          {line === "discpad" && lini && (
+            <>
+              <label className="block">
+                <span className="text-sm font-medium">
+                  Jumlah Produksi (PCS)
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={jumlahProduksi}
+                  onChange={(e) => setJumlahProduksi(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
+                />
+              </label>
+              {lini === "PRESS CETAK" ? (
+                <label className="block">
+                  <span className="text-sm font-medium">Jumlah Produksi (Shot)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={shot}
+                    onChange={(e) => setShot(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
+                  />
+                </label>
+              ) : (
+                <label className="block">
+                  <span className="text-sm font-medium">Jumlah Produksi (SET)</span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={jumlahProduksi === "" ? "" : Number(jumlahProduksi) / 2}
+                    readOnly
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800 dark:border-zinc-700"
+                  />
+                </label>
+              )}
+            </>
           )}
         </div>
 
@@ -620,7 +654,7 @@ export default function ProduksiForm({
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
               </label>
-              {line === "brakeshoe" && (
+              {(line === "brakeshoe" || line === "handle") && (
                 <>
                   <label className="block">
                     <span className="text-sm font-medium">Jumlah Pcs</span>

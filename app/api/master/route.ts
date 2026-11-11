@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireRole, requireSameOrigin } from "@/lib/authorize";
-import { deleteMasterProduct, getMasterRecords, saveMasterRecord } from "@/lib/master";
+import { getMasterRecords, saveMasterRecord } from "@/lib/master";
 
 export const runtime = "nodejs";
 
@@ -41,10 +41,5 @@ export async function DELETE(req: NextRequest) {
   const denied = requireSameOrigin(req);
   if (denied) return denied;
   const forbidden = await requireRole(["superadmin"]); if (forbidden) return forbidden;
-  try {
-    const body = await req.json();
-    const id = Number(body.id);
-    if (body.kind !== "product" || !Number.isSafeInteger(id) || id < 1) throw new Error("Permintaan tidak valid.");
-    return Response.json(await deleteMasterProduct(id));
-  } catch (error) { return errorResponse(error); }
+  return errorResponse(new Error("Master hanya mengelola data karyawan."));
 }

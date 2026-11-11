@@ -2,21 +2,17 @@
 
 import { and, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLog, divisi, karyawan, lembur, productLine } from "@/db/schema";
-import { calcLemburDuration, clean, isRemovedDivisi, now, uniqSort } from "./shared";
+import { auditLog, karyawan, lembur } from "@/db/schema";
+import { calcLemburDuration, clean, isRemovedLini, now, uniqSort } from "./shared";
 import { isValidISODate } from "./date";
 import { parseOvertime } from "./validation";
+import { FORM_MASTER } from "./form-options";
 
 export async function getLemburOptions() {
-  const divisiRows = await db
-    .select({ nama: divisi.nama })
-    .from(divisi)
-    .innerJoin(productLine, eq(divisi.productLineId, productLine.id))
-    .where(eq(productLine.nama, "brakeshoe"))
-    ;
-  const divisiOptions = divisiRows
-    .map((r) => r.nama)
-    .filter((n) => !isRemovedDivisi(n))
+  const liniOptions = FORM_MASTER.lines
+    .filter((row) => row.jenis === "brakeshoe")
+    .map((row) => row.nama)
+    .filter((n) => !isRemovedLini(n))
     .sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base", numeric: true }));
 
   const atasanRows = await db
@@ -26,26 +22,21 @@ export async function getLemburOptions() {
     ;
   const atasanOptions = atasanRows.map((r) => r.nama);
 
-  return { divisiOptions, atasanOptions: uniqSort(atasanOptions) };
+  return { liniOptions, atasanOptions: uniqSort(atasanOptions) };
 }
 
-export async function getLemburNamaByDivisi(divisiName: string): Promise<string[]> {
-  const d = clean(divisiName).toUpperCase();
+export async function getLemburNamaByLini(liniName: string): Promise<string[]> {
+  const d = clean(liniName).toUpperCase();
   if (!d) return [];
-  const rows = await db
-    .select({ nama: karyawan.nama, dv: divisi.nama })
-    .from(karyawan)
-    .innerJoin(divisi, eq(karyawan.divisiId, divisi.id))
-    .where(eq(karyawan.isActive, 1));
-  return uniqSort(
-    rows.filter((r) => clean(r.dv).toUpperCase() === d).map((r) => r.nama),
-  );
+  const rows = await db.select({ nama: karyawan.nama }).from(karyawan)
+    .where(and(eq(karyawan.isActive, 1), eq(karyawan.lini, d)));
+  return uniqSort(rows.map((row) => row.nama));
 }
 
 export async function submitLembur(input: unknown): Promise<string> {
   const payload = parseOvertime(input);
   const tanggal = clean(payload.tanggal);
-  const divisiName = clean(payload.divisi);
+  const liniName = clean(payload.lini);
   const nama = clean(payload.nama);
   const jamMulai = clean(payload.jamMulai);
   const jamSelesai = clean(payload.jamSelesai);
@@ -56,7 +47,7 @@ export async function submitLembur(input: unknown): Promise<string> {
   const buktiUrl = clean(payload.buktiUrl);
 
   if (!isValidISODate(tanggal)) throw new Error("Tanggal lembur tidak valid.");
-  if (!divisiName) throw new Error("Divisi wajib.");
+  if (!liniName) throw new Error("Lini wajib.");
   if (!nama) throw new Error("Nama wajib.");
   if (!jamMulai) throw new Error("Jam mulai wajib.");
   if (!jamSelesai) throw new Error("Jam selesai wajib.");
@@ -68,10 +59,10 @@ export async function submitLembur(input: unknown): Promise<string> {
   if (buktiUrl && !/^\/api\/lembur\/bukti\/[0-9a-f-]+\.(?:jpg|png|gif|webp|pdf)$/.test(buktiUrl)) {
     throw new Error("Alamat bukti lembur tidak valid.");
   }
-  const [employee] = await db.select({ karyawanId: karyawan.id, divisiId: divisi.id })
-    .from(karyawan).innerJoin(divisi, eq(karyawan.divisiId, divisi.id))
-    .where(and(eq(karyawan.nama, nama), eq(divisi.nama, divisiName), eq(karyawan.isActive, 1)));
-  if (!employee) throw new Error("Nama karyawan tidak sesuai dengan divisi aktif.");
+  const [employee] = await db.select({ karyawanId: karyawan.id })
+    .from(karyawan)
+    .where(and(eq(karyawan.nama, nama), eq(karyawan.lini, liniName), eq(karyawan.isActive, 1)));
+  if (!employee) throw new Error("Nama karyawan tidak sesuai dengan lini aktif.");
   const [supervisor] = await db.select({ id: karyawan.id }).from(karyawan)
     .where(and(eq(karyawan.nama, atasan), eq(karyawan.isActive, 1),
       or(eq(karyawan.jabatan, "leader"), eq(karyawan.jabatan, "spv"))));
@@ -82,8 +73,7 @@ export async function submitLembur(input: unknown): Promise<string> {
   await db.insert(lembur)
     .values({
       tanggal,
-      divisi: divisiName,
-      divisiId: employee.divisiId,
+      lini: liniName,
       nama,
       karyawanId: employee.karyawanId,
       jamMulai,

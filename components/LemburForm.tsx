@@ -27,8 +27,8 @@ const selectStyles: StylesConfig<Choice, false> = {
 };
 
 export default function LemburForm() {
-  const [options, setOptions] = useState<{ divisiOptions: string[]; atasanOptions: string[] } | null>(null);
-  const [divisi, setDivisi] = useState("");
+  const [options, setOptions] = useState<{ liniOptions: string[]; atasanOptions: string[] } | null>(null);
+  const [lini, setLini] = useState("");
   const [nama, setNama] = useState("");
   const [namaOptions, setNamaOptions] = useState<string[]>([]);
   const [tanggal, setTanggal] = useState(() => todayWIBISO());
@@ -57,12 +57,12 @@ export default function LemburForm() {
   }, []);
 
   useEffect(() => {
-    if (!divisi) return;
+    if (!lini) return;
     (async () => {
-      const r = await fetch(`/api/lembur?divisi=${encodeURIComponent(divisi)}`);
+      const r = await fetch(`/api/lembur?lini=${encodeURIComponent(lini)}`);
       setNamaOptions(r.ok ? await r.json() : []);
     })();
-  }, [divisi]);
+  }, [lini]);
 
   // Handle file selection with preview
   function handleBuktiChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -153,7 +153,7 @@ export default function LemburForm() {
     setMsg(null);
     const validation = overtimeSchema.safeParse({
       tanggal,
-      divisi,
+      lini,
       nama,
       jamMulai,
       jamSelesai,
@@ -193,7 +193,7 @@ export default function LemburForm() {
       // Success - reset form
       setMsg({ t: "success", v: j });
       setTanggal(todayWIBISO());
-      setDivisi("");
+      setLini("");
       setNama("");
       setNamaOptions([]);
       setJamMulai("");
@@ -216,7 +216,7 @@ export default function LemburForm() {
     <div className="overtime-page">
       <div className="page-heading"><div><p className="eyebrow">Karyawan / Pengajuan</p><h1>Input Lembur</h1><p>Ajukan jam kerja tambahan dan lampirkan bukti bila tersedia.</p></div></div>
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="form-section-heading"><span>01</span><div><h2>Informasi karyawan & jadwal</h2><p>Pilih divisi dahulu, lalu nama karyawan dan waktu lembur.</p></div></div>
+        <div className="form-section-heading"><span>01</span><div><h2>Informasi karyawan & jadwal</h2><p>Pilih lini dahulu, lalu nama karyawan dan waktu lembur.</p></div></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
             <span className="text-sm font-medium">Tanggal</span>
@@ -224,14 +224,14 @@ export default function LemburForm() {
             <small className="text-zinc-500">Tanggal lembur dilakukan</small>
           </label>
           <label className="block">
-            <span className="text-sm font-medium">Divisi</span>
+            <span className="text-sm font-medium">Lini</span>
             <Select
               styles={selectStyles}
               className="mt-1"
-              options={toOptions(options.divisiOptions)}
-              value={divisi ? { value: divisi, label: divisi } : null}
-              onChange={(opt) => { setDivisi(opt?.value ?? ""); setNama(""); setNamaOptions([]); }}
-              placeholder="-- Pilih Divisi --"
+              options={toOptions(options.liniOptions)}
+              value={lini ? { value: lini, label: lini } : null}
+              onChange={(opt) => { setLini(opt?.value ?? ""); setNama(""); setNamaOptions([]); }}
+              placeholder="-- Pilih Lini --"
               isClearable
             />
           </label>
@@ -245,7 +245,7 @@ export default function LemburForm() {
               onChange={(opt) => setNama(opt?.value ?? "")}
               placeholder="-- Pilih Nama --"
               isClearable
-              isDisabled={!divisi}
+              isDisabled={!lini}
             />
           </label>
           <label className="block">

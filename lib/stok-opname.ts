@@ -2,9 +2,10 @@
 
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLog, product, stokOpname } from "@/db/schema";
+import { auditLog, stokOpname } from "@/db/schema";
 import { clean, now, toInt, uniqSort } from "./shared";
 import { todayWIBISO } from "./date";
+import STOCK_CATALOG from "./stock-options.json";
 
 const MONTHS = [
   { value: 1, label: "Januari" },
@@ -22,21 +23,14 @@ const MONTHS = [
 ];
 
 /**
- * Get master data for stok opname form:
- * - items: op+kode pairs from product catalog
+ * Get hardcoded options for stok opname form:
+ * - items: op+kode pairs from the application catalog
  * - codes: unique kode list
  * - powders: unique powder coating list
  * - months: month options
  */
 export async function getStokOpnameMaster() {
-  const rows = await db
-    .select({
-      op: product.op,
-      kode: product.kode,
-      powder: product.powderCoating,
-    })
-    .from(product)
-    ;
+  const rows = STOCK_CATALOG;
 
   const items: { op: string | null; kode: string | null }[] = [];
   const codes: string[] = [];
@@ -92,12 +86,8 @@ export async function submitStokOpname(payload: {
   if (payload.nilaiA != null && payload.nilaiA !== "" && toInt(payload.nilaiA) === null) throw new Error("Nilai A tidak valid.");
   if (payload.nilaiB != null && payload.nilaiB !== "" && toInt(payload.nilaiB) === null) throw new Error("Nilai B tidak valid.");
 
-  // Ambil op & type dari katalog produk
-  const [p] = await db
-    .select({ op: product.op, type: product.type })
-    .from(product)
-    .where(and(eq(product.kode, kode), eq(product.powderCoating, powder)))
-    ;
+  // Resolve op & type from the hardcoded application catalog
+  const p = STOCK_CATALOG.find((row) => row.kode === kode && row.powder === powder);
   if (!p) throw new Error("Kombinasi kode dan powder tidak ada di katalog.");
 
   const op = p.op ?? "";
@@ -118,6 +108,18 @@ export async function submitStokOpname(payload: {
   });
 
   return `✅ Stok opname tersimpan | Kode: ${kode} | Powder: ${powder}`;
+}
+
+export async function updateStokOpname(id: number, payload: {
+  bulan?: unknown; tahun?: unknown; kode?: unknown; powder?: unknown; nilaiA?: unknown; nilaiB?: unknown;
+}): Promise<string> {
+  const [existing] = await db.select().from(stokOpname).where(eq(stokOpname.id, id));
+  if (!existing) throw new Error("Entri stok tidak ditemukan.");
+  if (Number(payload.bulan) !== existing.bulan || Number(payload.tahun) !== existing.tahun ||
+      clean(payload.kode) !== existing.kode || clean(payload.powder) !== existing.powder) {
+    throw new Error("Identitas entri stok tidak boleh diubah.");
+  }
+  return submitStokOpname(payload);
 }
 
 export async function stokEntryExists(bulan: number, tahun: number, kode: string, powder: string): Promise<boolean> {
@@ -152,8 +154,7 @@ export async function getStokOpnamePreview(params: {
     ;
   if (!rows.length) return { headers: [], rows: [], sheetName: `${bulan}-${tahun}`, exists: false };
 
-  const catalog = await db.select({ op: product.op, kode: product.kode, powder: product.powderCoating })
-    .from(product).orderBy(asc(product.kode));
+  const catalog = [...STOCK_CATALOG].sort((a, b) => (a.kode ?? "").localeCompare(b.kode ?? ""));
   const powders = uniqSort(catalog.map((r) => r.powder));
   const keyed = new Map<string, { op: string; kode: string }>();
   const values = new Map<string, { a: number; b: number }>();

@@ -1,33 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  BsBullseye,
-  BsCalendar3,
-  BsChevronDown,
-  BsExclamationCircle,
-  BsGraphUpArrow,
-  BsPeople,
-} from "react-icons/bs";
+import { BsArrowRight, BsBullseye, BsCalendar3, BsGraphUpArrow, BsPeople, BsTable } from "react-icons/bs";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 type GroupResult = {
   label: string;
@@ -57,6 +37,7 @@ type Performance = {
 };
 
 type ApiError = { error?: string };
+type ProductMetric = { key: string; product: string; unit: string; actual: number; target: number };
 
 const todayLocal = () => {
   const date = new Date();
@@ -67,6 +48,7 @@ const currentMonth = () => todayLocal().slice(0, 7);
 const numberFormat = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
 const percentLabel = (value: number | null) => value == null ? "–" : `${numberFormat.format(value)}%`;
 const amountLabel = (value: number) => numberFormat.format(value);
+const productLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 function attainmentVariant(value: number | null): "default" | "secondary" | "destructive" | "outline" {
   if (value == null) return "outline";
@@ -75,46 +57,41 @@ function attainmentVariant(value: number | null): "default" | "secondary" | "des
   return "destructive";
 }
 
-function ProgressBar({ value, label }: { value: number | null; label: string }) {
-  const width = value == null ? 0 : Math.min(100, Math.max(0, value));
-  return (
-    <progress
-      className="mt-3 h-2 w-full accent-primary"
-      aria-label={`${label}: ${percentLabel(value)} dari target`}
-      max={100}
-      value={width}
-    />
-  );
-}
-
 function SummaryMetric({
   label,
   value,
-  detail,
   icon: Icon,
-  featured = false,
 }: {
   label: string;
   value: string | number;
-  detail: string;
   icon: typeof BsBullseye;
-  featured?: boolean;
 }) {
   return (
-    <Card className={`h-full ${featured ? "bg-primary text-primary-foreground" : ""}`}>
-      <CardHeader className="flex-row items-start justify-between space-y-0 p-4 sm:p-5">
-        <div className="min-w-0">
-          <CardDescription className={featured ? "text-primary-foreground/75" : "uppercase tracking-wide"}>{label}</CardDescription>
-          <CardTitle className="mt-3 text-3xl tabular-nums">{value}</CardTitle>
-        </div>
-        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-background/10 text-current">
-          <Icon size={16} aria-hidden="true" />
-        </span>
-      </CardHeader>
-      <CardContent className={`px-4 pb-4 pt-0 text-xs ${featured ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
-        {detail}
-      </CardContent>
-    </Card>
+    <div className="flex min-w-0 items-center gap-2.5 px-3 py-3 sm:px-4">
+      <Icon className="shrink-0 text-primary" size={16} aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-lg font-semibold tabular-nums leading-tight">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function Shortcut({ href, title, detail }: { href: string; title: string; detail: string }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+        <BsTable size={16} aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>
+      </span>
+      <BsArrowRight className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -125,7 +102,6 @@ export default function ExecutiveDashboard() {
   const [data, setData] = useState<Performance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   const periodValue = mode === "day" ? day : month;
   const query = useMemo(() => {
@@ -143,7 +119,7 @@ export default function ExecutiveDashboard() {
         if (!response.ok) throw new Error(body.error || "Gagal memuat laporan target.");
         return body;
       })
-      .then((body) => { setData(body); setExpanded(null); })
+      .then(setData)
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
         setError(cause instanceof Error ? cause.message : "Gagal memuat laporan target.");
@@ -154,23 +130,46 @@ export default function ExecutiveDashboard() {
   }, [query]);
 
   const lines = data?.lines ?? [];
-  const totalGroups = data?.summary.operatorGroups ?? 0;
-  const completeLines = data?.summary.achievedLines ?? 0;
   const activeLines = data?.summary.activeLines ?? 0;
   const targetLines = data?.summary.targetLines ?? lines.length;
-  const achievementRate = activeLines > 0 ? completeLines / activeLines * 100 : null;
+  const totalGroups = data?.summary.operatorGroups ?? 0;
+  const achievementRate = activeLines > 0 ? (data?.summary.achievedLines ?? 0) / activeLines * 100 : null;
+
+  const productMetrics = useMemo(() => {
+    const totals = new Map<string, ProductMetric>();
+    for (const line of lines) {
+      if (!line.groups.length) continue;
+      const key = `${line.produk}-${line.satuan}`;
+      const current = totals.get(key) ?? {
+        key,
+        product: line.produk,
+        unit: line.satuan,
+        actual: 0,
+        target: 0,
+      };
+      current.actual += line.actual;
+      current.target += line.target;
+      totals.set(key, current);
+    }
+    return [...totals.values()].sort((a, b) => b.actual - a.actual).slice(0, 6);
+  }, [lines]);
+
+  const lowestLines = useMemo(() => lines
+    .filter((line) => line.groups.length > 0 && line.percentage != null)
+    .sort((a, b) => (a.percentage ?? 0) - (b.percentage ?? 0))
+    .slice(0, 6), [lines]);
 
   return (
-    <section aria-label="Dashboard target dan produksi" className="space-y-5">
+    <section aria-label="Dashboard analisis lini" className="space-y-4">
       <Card className="overflow-hidden">
-        <header className="flex flex-col gap-5 bg-primary px-5 py-6 text-primary-foreground sm:px-7 sm:py-7 xl:flex-row xl:items-end xl:justify-between">
+        <header className="flex flex-col gap-4 bg-primary px-5 py-5 text-primary-foreground sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="max-w-xl">
-            <Badge variant="secondary" className="mb-3">PPIC / Ringkasan eksekutif</Badge>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Target &amp; Produksi</h1>
-            <p className="mt-2 text-sm text-primary-foreground/80">Pantau pencapaian lini dan kontribusi operator terhadap target produksi.</p>
+            <Badge variant="secondary" className="mb-2">PPIC / Ringkasan eksekutif</Badge>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Analisis lini</h2>
+            <p className="mt-1 text-sm text-primary-foreground/80">Grafik pencapaian dan produksi per periode.</p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="inline-flex w-fit items-center gap-1 rounded-md bg-background/10 p-1" role="group" aria-label="Periode laporan">
               <Button type="button" size="sm" variant={mode === "day" ? "secondary" : "ghost"} aria-pressed={mode === "day"} onClick={() => setMode("day")}>
                 Harian
@@ -179,176 +178,123 @@ export default function ExecutiveDashboard() {
                 Bulanan
               </Button>
             </div>
-            <label className="flex min-w-48 flex-col gap-1.5 text-xs font-medium text-primary-foreground/80">
+            <label className="flex min-w-44 flex-col gap-1 text-xs font-medium text-primary-foreground/80">
               {mode === "day" ? "Pilih tanggal" : "Pilih bulan"}
               <Input
                 type={mode === "day" ? "date" : "month"}
                 value={periodValue}
                 onChange={(event) => mode === "day" ? setDay(event.target.value) : setMonth(event.target.value)}
-                className="bg-background text-foreground"
+                className="h-9 bg-background text-foreground"
               />
             </label>
           </div>
         </header>
-
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t bg-card px-5 py-3 text-xs text-muted-foreground sm:px-7">
-          <span className="inline-flex items-center gap-2 font-medium text-foreground">
-            <BsGraphUpArrow aria-hidden="true" className="text-primary" />
-            {data?.periodLabel ?? "Ringkasan periode"}
-          </span>
-          <span>{lines.length} target lini/shift</span>
-          <span>{totalGroups} grup operator</span>
+        <div className="grid grid-cols-2 divide-x divide-y border-t sm:grid-cols-4 sm:divide-y-0">
+          <SummaryMetric label="Target lini/shift" value={loading ? "–" : targetLines} icon={BsGraphUpArrow} />
+          <SummaryMetric label="Lini aktif" value={loading ? "–" : activeLines} icon={BsCalendar3} />
+          <SummaryMetric label="Mencapai target" value={loading ? "–" : percentLabel(achievementRate)} icon={BsBullseye} />
+          <SummaryMetric label="Grup operator" value={loading ? "–" : totalGroups} icon={BsPeople} />
         </div>
       </Card>
 
       {error && (
-        <Alert className="flex items-start gap-3">
-          <BsExclamationCircle className="mt-0.5 shrink-0" aria-hidden="true" />
+        <Alert role="alert" className="flex items-start gap-3">
+          <BsBullseye className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>{error}</p>
         </Alert>
       )}
 
-      <section aria-label="Ringkasan pencapaian" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryMetric label="Lini mencapai target" value={loading ? "–" : `${completeLines} / ${activeLines}`} detail={`${percentLabel(achievementRate)} dari lini aktif`} icon={BsBullseye} featured />
-        <SummaryMetric label="Target lini/shift" value={loading ? "–" : targetLines} detail="Target yang dikonfigurasi" icon={BsGraphUpArrow} />
-        <SummaryMetric label="Lini/shift aktif" value={loading ? "–" : activeLines} detail="Memiliki laporan pada periode ini" icon={BsCalendar3} />
-        <SummaryMetric label="Grup operator/tim" value={loading ? "–" : totalGroups} detail="Tercatat dalam laporan" icon={BsPeople} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Target dan aktual per produk</CardTitle>
+            <CardDescription>{data?.periodLabel ?? "Periode terpilih"} · {productMetrics.length} kelompok produk/satuan</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-5" aria-label="Memuat grafik" aria-live="polite">
+                {[0, 1, 2].map((item) => <div key={item} className="h-10 animate-pulse rounded bg-muted" />)}
+              </div>
+            ) : productMetrics.length ? (
+              <>
+                <div className="mb-4 flex gap-4 text-xs text-muted-foreground" aria-label="Legenda grafik">
+                  <span className="inline-flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-primary" /> Aktual</span>
+                  <span className="inline-flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-muted-foreground/30" /> Target</span>
+                </div>
+                <div className="space-y-4" role="img" aria-label="Grafik perbandingan aktual dan target produksi per produk">
+                  {productMetrics.map((metric) => {
+                    const maxAmount = Math.max(1, metric.actual, metric.target);
+                    return <div key={metric.key}>
+                      <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+                        <span className="truncate font-semibold">{productLabel(metric.product)} <span className="font-normal text-muted-foreground">· {metric.unit}</span></span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{percentLabel(metric.target > 0 ? metric.actual / metric.target * 100 : null)}</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="h-2.5 overflow-hidden rounded-sm bg-muted" title={`Target ${amountLabel(metric.target)} ${metric.unit}`}>
+                          <div className="h-full rounded-sm bg-muted-foreground/30" style={{ width: `${metric.target / maxAmount * 100}%` }} />
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-sm bg-muted" title={`Aktual ${amountLabel(metric.actual)} ${metric.unit}`}>
+                          <div className="h-full rounded-sm bg-primary" style={{ width: `${metric.actual / maxAmount * 100}%` }} />
+                        </div>
+                      </div>
+                      <div className="mt-1 flex justify-between text-[10px] tabular-nums text-muted-foreground">
+                        <span>Aktual {amountLabel(metric.actual)}</span><span>Target {amountLabel(metric.target)}</span>
+                      </div>
+                    </div>
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">Belum ada laporan produksi pada periode ini.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Pencapaian lini terendah</CardTitle>
+            <CardDescription>Maksimal 6 lini aktif yang perlu perhatian</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-5" aria-label="Memuat grafik" aria-live="polite">
+                {[0, 1, 2].map((item) => <div key={item} className="h-10 animate-pulse rounded bg-muted" />)}
+              </div>
+            ) : lowestLines.length ? (
+              <div className="space-y-4" role="img" aria-label="Grafik persentase pencapaian lini dengan nilai terendah">
+                {lowestLines.map((line, index) => (
+                  <div key={`${line.produk}-${line.lini}-${line.shift}-${line.satuan}-${line.basis}`}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold">{line.lini}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">{productLabel(line.produk)} · {line.shift} · {line.satuan}{line.basis === "per_orang" ? " / orang" : " / tim"}</p>
+                      </div>
+                      <Badge variant={attainmentVariant(line.percentage)} className="shrink-0 tabular-nums">{percentLabel(line.percentage)}</Badge>
+                    </div>
+                    <div className="relative h-2.5 overflow-hidden rounded-sm bg-muted">
+                      <div className="absolute inset-y-0 left-0 w-px bg-foreground/20" style={{ left: "80%" }} aria-hidden="true" />
+                      <div className="h-full rounded-sm bg-primary" style={{ width: `${Math.min(100, Math.max(0, line.percentage ?? 0))}%` }} />
+                    </div>
+                    {index === 0 && <p className="mt-1 text-[10px] text-muted-foreground">Penanda pada 80% · batas pencapaian target di 100%</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">Belum ada lini aktif untuk dibandingkan.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <section aria-labelledby="analysis-shortcuts" className="space-y-2.5">
+        <h3 id="analysis-shortcuts" className="text-sm font-semibold">Pintasan</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Shortcut href="/hasil-produksi" title="Hasil Produksi" detail="Buka laporan dan ekspor data" />
+          <Shortcut href="/target-produksi" title="Target Produksi" detail="Kelola target lini dan shift" />
+        </div>
       </section>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-col gap-1 border-b p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
-          <div>
-            <Badge variant="outline" className="mb-2">Analisis lini</Badge>
-            <CardTitle className="text-base">Target dibanding produksi aktual</CardTitle>
-          </div>
-          <CardDescription>Persentase pencapaian = aktual ÷ target</CardDescription>
-        </CardHeader>
-
-        {loading ? (
-          <div className="divide-y" aria-label="Memuat data target" aria-live="polite">
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="animate-pulse px-4 py-5 sm:px-5">
-                <div className="h-3 w-40 rounded bg-muted" />
-                <div className="mt-4 h-2 w-full rounded bg-muted" />
-              </div>
-            ))}
-          </div>
-        ) : lines.length === 0 && !error ? (
-          <CardContent className="py-12 text-center">
-            <BsBullseye className="mx-auto size-6 text-muted-foreground" aria-hidden="true" />
-            <h3 className="mt-4 text-sm font-semibold">Belum ada target untuk periode ini</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Atur target per lini, shift, satuan, dan basis di menu Target Produksi.</p>
-          </CardContent>
-        ) : (
-          <div className="divide-y">
-            {lines.map((line) => {
-              const key = `${line.produk}-${line.lini}-${line.shift}-${line.satuan}`;
-              const detailsId = `line-details-${encodeURIComponent(key)}`;
-              const isExpanded = expanded === key;
-              const Icon = line.basis === "per_orang" ? BsPeople : BsBullseye;
-              const hasActivity = line.groups.length > 0;
-              const displayTarget = hasActivity ? line.target : line.targetPerUnit;
-              return (
-                <article key={key}>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(180px,1fr)_minmax(240px,1.25fr)_minmax(150px,auto)_auto] lg:items-center">
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-md bg-muted text-primary"><Icon size={16} aria-hidden="true" /></span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{line.lini}</span>
-                        <span className="mt-1 flex flex-wrap gap-1.5">
-                          <Badge variant="secondary" className="text-[10px]">{line.produk}</Badge>
-                          <Badge variant="outline" className="text-[10px]">{line.shift}</Badge>
-                          <Badge variant="outline" className="text-[10px]">{line.satuan}</Badge>
-                        </span>
-                      </span>
-                    </span>
-
-                    <span className="grid min-w-0 grid-cols-2 gap-2">
-                      <span className="rounded-md border bg-background px-3 py-2">
-                        <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Aktual</span>
-                        <strong className="mt-1 block text-base font-semibold tabular-nums text-foreground">{amountLabel(line.actual)} <span className="text-xs font-medium text-muted-foreground">{line.satuan}</span></strong>
-                      </span>
-                      <span className="rounded-md border bg-background px-3 py-2">
-                        <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          {hasActivity ? "Target periode" : `Target / ${line.basis === "per_orang" ? "orang" : "tim"}`}
-                        </span>
-                        <strong className="mt-1 block text-base font-semibold tabular-nums text-foreground">{amountLabel(displayTarget)} <span className="text-xs font-medium text-muted-foreground">{line.satuan}</span></strong>
-                      </span>
-                    </span>
-
-                    <span className="flex min-w-0 flex-wrap items-center justify-between gap-3 lg:flex-col lg:items-end lg:justify-center">
-                      {hasActivity && line.target > 0 ? (
-                        <>
-                          <Badge variant={attainmentVariant(line.percentage)}>{percentLabel(line.percentage)}</Badge>
-                          <span className="w-full"><ProgressBar value={line.percentage} label={`${line.lini} ${line.shift}`} /></span>
-                        </>
-                      ) : hasActivity ? (
-                        <Badge variant="outline" className="whitespace-nowrap">Target bernilai 0</Badge>
-                      ) : (
-                        <Badge variant="outline" className="whitespace-nowrap">Belum ada laporan terhitung</Badge>
-                      )}
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label={`${isExpanded ? "Tutup" : "Buka"} rincian ${line.lini}, ${line.shift}`}
-                      aria-expanded={isExpanded}
-                      aria-controls={detailsId}
-                      onClick={() => setExpanded(isExpanded ? null : key)}
-                      className="justify-self-end"
-                    >
-                      <BsChevronDown className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
-                    </Button>
-                  </div>
-
-                  {isExpanded && (
-                    <div id={detailsId} className="border-t bg-muted/30 px-4 py-4 sm:px-5">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-xs font-semibold">Rincian {line.basis === "per_orang" ? "operator" : "tim"}</h3>
-                        <Badge variant="outline">Target {line.basis === "per_orang" ? "per orang" : "per tim"} / {line.satuan}</Badge>
-                      </div>
-                      {line.groups.length === 0 ? (
-                        <p className="py-3 text-sm text-muted-foreground">Belum ada laporan operator/tim untuk lini dan shift ini.</p>
-                      ) : (
-                        <div className="overflow-x-auto rounded-md border bg-card">
-                          <Table className="min-w-[500px]">
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Operator / Tim</TableHead>
-                                <TableHead className="text-right">Aktual</TableHead>
-                                <TableHead className="text-right">Target</TableHead>
-                                <TableHead className="text-right">Pencapaian</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {line.groups.map((group) => (
-                                <TableRow key={group.label}>
-                                  <TableCell className="font-medium">{group.label}<span className="ml-2 text-xs font-normal text-muted-foreground">{group.operatorCount} orang</span></TableCell>
-                                  <TableCell className="text-right tabular-nums">{amountLabel(group.actual)} {line.satuan}</TableCell>
-                                  <TableCell className="text-right tabular-nums">{amountLabel(group.target)} {line.satuan}</TableCell>
-                                  <TableCell className="text-right"><Badge variant={attainmentVariant(group.percentage)}>{percentLabel(group.percentage)}</Badge></TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        )}
-
-        {error && <div className="border-t px-5 py-4 text-center text-sm text-muted-foreground">Data target belum dapat ditampilkan.</div>}
-      </Card>
-
-      <footer className="flex flex-col gap-1 border-t pt-4 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <span>Aktual tim dengan beberapa operator dibagi rata untuk tampilan per orang. Target bulanan dihitung pada hari lini/shift memiliki laporan.</span>
-        <span className="shrink-0">Pencapaian 100% atau lebih memenuhi target.</span>
-      </footer>
+      <p className="text-xs text-muted-foreground">Target bulanan dihitung pada hari lini/shift memiliki laporan. Pencapaian 100% atau lebih memenuhi target.</p>
     </section>
   );
 }

@@ -7,6 +7,7 @@ import { safeRedirectPath } from "@/lib/safe-redirect";
 export default function LoginForm() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +38,7 @@ export default function LoginForm() {
       <label htmlFor="login-username">Nama pengguna</label>
       <input id="login-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required disabled={pending} />
       <label htmlFor="login-password">Kata sandi</label>
-      <input id="login-password" name="password" type="password" autoComplete="current-password" required disabled={pending} />
+      <div className="login-password-field"><input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required disabled={pending} /><button type="button" className="login-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-pressed={showPassword} aria-label={showPassword ? "Sembunyikan kata sandi" : "Lihat kata sandi"}>{showPassword ? "Sembunyikan" : "Lihat"}</button></div>
       {error && <p role="alert" className="login-error">{error}</p>}
       <button type="submit" disabled={pending}>
         <span>{pending ? "Sedang masuk…" : "Masuk"}</span>

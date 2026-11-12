@@ -50,7 +50,18 @@ export async function PATCH(request: NextRequest) {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error("ID akun tidak valid.");
     if (String(id) === session.user.id && body.isActive === 0) throw new Error("Akun yang sedang digunakan tidak dapat dinonaktifkan.");
     const update: Partial<typeof schema.appUser.$inferInsert> = {};
-    if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
+    if (typeof body.name === "string") {
+      const name = body.name.trim();
+      if (!name || name.length > 120) throw new Error("Nama wajib diisi (maksimal 120 karakter).");
+      update.name = name;
+    }
+    if (typeof body.username === "string") {
+      const username = body.username.trim().toLowerCase();
+      if (!/^[a-z0-9._-]{3,50}$/.test(username)) throw new Error("Username harus 3–50 karakter: huruf, angka, titik, garis bawah, atau tanda hubung.");
+      const [existing] = await db.select({ id: schema.appUser.id }).from(schema.appUser).where(eq(schema.appUser.username, username)).limit(1);
+      if (existing && existing.id !== id) throw new Error("Username sudah digunakan.");
+      update.username = username;
+    }
     if (isAppRole(body.role)) update.role = body.role;
     if (body.isActive === 0 || body.isActive === 1) update.isActive = body.isActive;
     if (typeof body.password === "string" && body.password.length) update.passwordHash = await hashPassword(body.password);

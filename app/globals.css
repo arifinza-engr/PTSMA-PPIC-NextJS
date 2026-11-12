@@ -382,6 +382,9 @@ input, select, textarea, button { font: inherit; }
 .app-main .login-form input::placeholder { color: #8799a1; }
 .app-main .login-form input:focus { border-color: #3759c0; box-shadow: 0 0 0 3px #203ea120; }
 .app-main .login-form input:disabled { color: #71828a; background: #f1f4f5; }
+.app-main .login-form .login-password-field { position: relative; display: flex; align-items: center; }
+.app-main .login-form .login-password-field input { width: 100%; padding-right: 76px; }
+.app-main .login-form .login-password-toggle { position: absolute; right: 10px; padding: 4px; border: 0; color: #3759c0; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
 .app-main .login-form button[type="submit"] {
   display: flex;
   align-items: center;

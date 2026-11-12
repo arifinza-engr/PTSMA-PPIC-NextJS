@@ -1,0 +1,17 @@
+[Unit]
+Description=PPIC Next.js application
+After=network.target postgresql@12-main.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/PTSMA-PPIC-NextJS
+Environment=NODE_ENV=production
+Environment=PATH=/root/.nvm/versions/node/v24.22.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/root/.nvm/versions/node/v24.22.2/bin/node /root/PTSMA-PPIC-NextJS/node_modules/next/dist/bin/next start
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

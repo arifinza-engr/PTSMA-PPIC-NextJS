@@ -1,14 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FORM_MASTER } from "@/lib/form-options";
+import { useSession } from "next-auth/react";
+import { Modal } from "@/components/ui/modal";
 
 type Employee = { id: number; nama: string; lini: string | null; jabatan: string; isActive: number };
 type EmployeeForm = { nama: string; lini: string; jabatan: string; isActive: boolean };
 const EMPTY: EmployeeForm = { nama: "", lini: "", jabatan: "operator", isActive: true };
 
 export default function MasterTables() {
+  const { data: session } = useSession();
+  const canManageEmployees = session?.user.role === "ppic" || session?.user.role === "superadmin";
+  const canDeleteEmployees = session?.user.role === "superadmin";
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [liniOptions, setLiniOptions] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<EmployeeForm>(EMPTY);
   const [search, setSearch] = useState("");
@@ -21,6 +26,7 @@ export default function MasterTables() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Gagal memuat karyawan.");
     setEmployees(data.employees ?? []);
+    setLiniOptions(data.liniOptions ?? []);
   }, []);
 
   useEffect(() => {
@@ -46,38 +52,64 @@ export default function MasterTables() {
     finally { setSaving(false); }
   }
 
-  const liniOptions = [...new Set(FORM_MASTER.lines.map((row) => row.nama))].sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base" }));
+  async function remove(row: Employee) {
+    if (!window.confirm(`Hapus karyawan ${row.nama}?`)) return;
+    setError(""); setMessage("");
+    try {
+      const response = await fetch("/api/master", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "employee", id: row.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gagal menghapus karyawan.");
+      setMessage(`Karyawan ${row.nama} berhasil dihapus.`); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Gagal menghapus karyawan."); }
+  }
+
+  function closeEditor() {
+    setEditingId(null); setForm(EMPTY); setError("");
+  }
+
+  const employeeForm = <form onSubmit={save}>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <label className="block"><span>Nama</span><input required value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} /></label>
+      <label className="block"><span>Lini</span><select required value={form.lini} onChange={(e) => setForm({ ...form, lini: e.target.value })}>
+        <option value="">Pilih lini</option>{liniOptions.map((nama) => <option key={nama}>{nama}</option>)}
+      </select></label>
+      <label className="block"><span>Jabatan</span><select value={form.jabatan} onChange={(e) => setForm({ ...form, jabatan: e.target.value })}>
+        {["operator", "leader", "spv", "admin"].map((value) => <option key={value}>{value}</option>)}
+      </select></label>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /><span>Aktif</span></label>
+    </div>
+    {error && <p role="alert" className="notice-error mt-3">{error}</p>}
+    <div className="mt-5 flex justify-end gap-2">
+      {editingId !== null && <button type="button" className="action-secondary" onClick={closeEditor}>Batal</button>}
+      <button type="submit" disabled={saving}>{saving ? "Menyimpan…" : "Simpan"}</button>
+    </div>
+  </form>;
 
   return <section className="master-page">
     <div className="page-heading"><div><p className="eyebrow">Administrasi / Referensi</p><h1>Master Karyawan</h1>
       <p>Kelola data karyawan, lini kerja, dan jabatan.</p></div></div>
-    <form onSubmit={save} className="mb-6">
-      <div className="form-section-heading"><span>{editingId ? "↗" : "+"}</span><div>
-        <h2>{editingId ? `Ubah karyawan #${editingId}` : "Tambah karyawan"}</h2>
-        <p>Isi nama, lini, jabatan, dan status karyawan.</p></div></div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block"><span>Nama</span><input required value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} /></label>
-        <label className="block"><span>Lini</span><select required value={form.lini} onChange={(e) => setForm({ ...form, lini: e.target.value })}>
-          <option value="">Pilih lini</option>{liniOptions.map((nama) => <option key={nama}>{nama}</option>)}
-        </select></label>
-        <label className="block"><span>Jabatan</span><select value={form.jabatan} onChange={(e) => setForm({ ...form, jabatan: e.target.value })}>
-          {["operator", "leader", "spv", "admin"].map((value) => <option key={value}>{value}</option>)}
-        </select></label>
-        <label className="block"><span>Aktif</span><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /></label>
-      </div>
-      {error && <p role="alert" className="notice-error mt-3">{error}</p>}
-      {message && <p role="status" className="notice-success mt-3">{message}</p>}
-      <div className="mt-4 flex gap-2"><button type="submit" disabled={saving}>{saving ? "Menyimpan…" : "Simpan"}</button>
-        {editingId && <button type="button" className="action-secondary" onClick={() => { setEditingId(null); setForm(EMPTY); }}>Batal</button>}
-      </div>
-    </form>
+    {error && editingId === null && <p role="alert" className="notice-error mb-3">{error}</p>}
+    {message && <p role="status" className="notice-success mb-4">{message}</p>}
+    {canManageEmployees && editingId === null && <div className="mb-6 rounded-xl border border-border bg-card p-5">
+      <div className="form-section-heading"><span>+</span><div><h2>Tambah karyawan</h2><p>Isi nama, lini, jabatan, dan status karyawan.</p></div></div>
+      {employeeForm}
+    </div>}
+    <Modal open={canManageEmployees && editingId !== null} title={`Ubah karyawan #${editingId ?? ""}`} description="Perbarui data karyawan." onClose={closeEditor}>
+      {employeeForm}
+    </Modal>
     <div className="data-panel"><div className="data-panel-header"><div><p className="eyebrow">Daftar karyawan</p><h2>{rows.length} data</h2></div>
       <label className="search-field">Cari<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari karyawan" /></label></div>
       <div className="table-frame max-h-[600px] overflow-auto"><table><thead><tr><th>ID</th><th>Nama</th><th>Lini</th><th>Jabatan</th><th>Aktif</th><th>Aksi</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}><td>{row.id}</td><td>{row.nama}</td><td>{row.lini ?? "—"}</td><td>{row.jabatan}</td><td>{row.isActive ? "Ya" : "Tidak"}</td>
-          <td><button type="button" className="table-action" onClick={() => { setEditingId(row.id); setForm({ nama: row.nama, lini: row.lini ?? "", jabatan: row.jabatan, isActive: Boolean(row.isActive) }); }}>Ubah</button></td>
+          <td>{canManageEmployees && <button type="button" className="table-action" onClick={() => { setError(""); setEditingId(row.id); setForm({ nama: row.nama, lini: row.lini ?? "", jabatan: row.jabatan, isActive: Boolean(row.isActive) }); }}>Ubah</button>}
+            {canDeleteEmployees && <button type="button" className="table-action danger" onClick={() => void remove(row)}>Hapus</button>}</td>
         </tr>)}</tbody></table></div>
       {employees.length === 0 && !error && <p className="empty-inline">Belum ada data karyawan.</p>}
+      {employees.length > 0 && rows.length === 0 && <p className="empty-inline">Tidak ada karyawan yang cocok dengan pencarian.</p>}
     </div>
   </section>;
 }

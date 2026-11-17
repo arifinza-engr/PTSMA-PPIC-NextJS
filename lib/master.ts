@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { auditLog, karyawan } from "@/db/schema";
 import { now } from "./shared";
-import { FORM_MASTER } from "./form-options";
+import { getProductionMaster } from "./production-master";
 
 const employeeSchema = z.object({
   nama: z.string().trim().min(1).max(150),
@@ -18,13 +18,15 @@ async function audit(tx: Tx, entity: string, id: number, action: string, before:
 }
 
 export async function getMasterRecords() {
-  return { employees: await db.select().from(karyawan) };
+  const [employees, products] = await Promise.all([db.select().from(karyawan), getProductionMaster()]);
+  return { employees, liniOptions: [...new Set(products.flatMap((product) => product.lines.filter((line) => line.isActive === 1).map((line) => line.nama)))].sort() };
 }
 
 export async function saveMasterRecord(kind: string, id: number | null, input: unknown) {
   if (kind === "employee") {
     const value = employeeSchema.parse(input);
-    if (!FORM_MASTER.lines.some((row) => row.nama === value.lini)) throw new Error("Lini tidak dikenal.");
+    const products = await getProductionMaster();
+    if (!products.some((product) => product.lines.some((row) => row.nama === value.lini && row.isActive === 1))) throw new Error("Lini tidak dikenal atau tidak aktif.");
     return db.transaction(async (tx) => {
       const before = id ? (await tx.select().from(karyawan).where(eq(karyawan.id, id)))[0] : null;
       if (id && !before) throw new Error("Karyawan tidak ditemukan.");
@@ -37,4 +39,15 @@ export async function saveMasterRecord(kind: string, id: number | null, input: u
     });
   }
   throw new Error("Master yang dapat dikelola hanya data karyawan.");
+}
+
+export async function deleteMasterRecord(kind: string, id: number) {
+  if (kind !== "employee") throw new Error("Master yang dapat dikelola hanya data karyawan.");
+  return db.transaction(async (tx) => {
+    const before = (await tx.select().from(karyawan).where(eq(karyawan.id, id)))[0];
+    if (!before) throw new Error("Karyawan tidak ditemukan.");
+    await tx.delete(karyawan).where(eq(karyawan.id, id));
+    await audit(tx, "karyawan", id, "delete", before, null);
+    return { success: true };
+  });
 }

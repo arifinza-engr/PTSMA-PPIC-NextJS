@@ -1,4 +1,27 @@
 import { pgTable, serial, integer, text, index, uniqueIndex, doublePrecision, jsonb } from "drizzle-orm/pg-core"
+import type { ProductionLineConfig, ProductionOptions } from "../lib/production-master-types"
+
+export const productionProductMaster = pgTable("production_product_master", {
+	kode: text().primaryKey(),
+	nama: text().notNull(),
+	isActive: integer("is_active").default(1).notNull(),
+	sortOrder: integer("sort_order").default(0).notNull(),
+	lines: jsonb().$type<ProductionLineConfig[]>().notNull().default([]),
+	options: jsonb().$type<ProductionOptions>().notNull().default({
+		types: [], grades: [], kulits: [], codes: [], coatings: [], tebals: [],
+		abOptions: [], typeHandles: [], posisiHandles: [], warnas: [], processes: [],
+	}),
+})
+
+export const stockOpnameMaster = pgTable("stock_opname_master", {
+	id: serial().primaryKey(),
+	op: text(),
+	kode: text().notNull(),
+	type: text(),
+	powder: text().notNull(),
+	isActive: integer("is_active").default(1).notNull(),
+	sortOrder: integer("sort_order").default(0).notNull(),
+}, (table) => [index("idx_stock_opname_master_active_sort").on(table.isActive, table.sortOrder)]);
 
 export const karyawan = pgTable("karyawan", {
 	id: serial().primaryKey(),
@@ -35,6 +58,7 @@ const productionFormColumns = () => ({
 	requestHash: text("request_hash"),
 	qtyTotal: integer("qty_total"),
 	operators: jsonb().$type<string[]>().notNull().default([]),
+	assistedOperators: jsonb("assisted_operators").$type<{ id: number; nama: string; liniAsal: string | null }[]>().notNull().default([]),
 	items: jsonb().$type<Record<string, string | number | null>[]>().notNull().default([]),
 	createdBy: integer("created_by"),
 	createdAt: text("created_at").notNull(),

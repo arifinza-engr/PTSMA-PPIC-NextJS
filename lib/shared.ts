@@ -51,7 +51,6 @@ export function normalizeLini(line: string, name: string): string {
 
   return u;
 }
-
 // Hitung selisih jam lembur "HH:mm" -> number (jam desimal), port calcLemburDuration
 export function calcLemburDuration(jamMulai: unknown, jamSelesai: unknown): number {
   const a = clean(jamMulai).split(":");
@@ -61,28 +60,6 @@ export function calcLemburDuration(jamMulai: unknown, jamSelesai: unknown): numb
   let end = Number(b[0]) * 60 + Number(b[1]);
   if (end < start) end += 24 * 60; // lewat tengah malam
   return Number(((end - start) / 60).toFixed(2));
-}
-
-// Lini brakeshoe legacy yang tidak lagi digunakan di form produksi.
-export const LINI_REMOVED_BRAKESHOE = [
-  "TENSIU CASTING",
-  "TENSHU CASTING",
-  "BARREL",
-  "PACKING HANDLE",
-  "PELEBURAN",
-];
-
-// Lini yang pakai team (operator diambil dari sheet Team, bukan Lini)
-export const LINI_TEAM: Record<string, string[]> = {
-  discpad: ["PACKING", "SHOT BLASTING", "PAINTING"],
-  brakeshoe: ["SPRAY", "PACKING", "ALODINE & BARREL"],
-};
-
-export function isTeamLini(line: string, lini: string): boolean {
-  const teams = LINI_TEAM[line];
-  if (!teams) return false;
-  const u = normalizeLini(line, lini);
-  return teams.includes(u);
 }
 
 // Parse string "YYYY-MM-DD" ke Date object (null jika invalid)
@@ -160,8 +137,4 @@ export function getTargetSheetName(
   }
 
   return u;
-}
-
-export function isRemovedLini(nama: string): boolean {
-  return LINI_REMOVED_BRAKESHOE.includes(nama.toUpperCase().trim());
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import STOCK_CATALOG from "@/lib/stock-options.json";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { getMaster, getOperators, getProductionData, submitProduksi } from "@/lib/produksi";
 import { getStokOpnameMaster, getStokOpnamePreview, submitStokOpname } from "@/lib/stok-opname";
 import { parseProduction, parseStock } from "@/lib/validation";
@@ -33,7 +34,9 @@ describe("alur data operasional", () => {
   it("memvalidasi periode dan menampilkan matriks stok dengan kolom yang cocok", async () => {
     expect(() => parseStock({ bulan: 13, tahun: 2099, kode: "X", powder: "Y" })).toThrow();
     expect((await getStokOpnameMaster()).years).toContain(new Date().getFullYear());
-    const item = STOCK_CATALOG.find((row) => row.kode && row.powder);
+    const [item] = await db.select({ kode: schema.stockOpnameMaster.kode, powder: schema.stockOpnameMaster.powder })
+      .from(schema.stockOpnameMaster)
+      .where(eq(schema.stockOpnameMaster.isActive, 1));
     expect(item?.kode).toBeTruthy();
     expect(item?.powder).toBeTruthy();
     await submitStokOpname(parseStock({ bulan: 12, tahun: 2099, kode: item!.kode, powder: item!.powder, nilaiA: 5, nilaiB: 2 }));

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   BsArrowRight,
-  BsBoxSeam,
   BsClockHistory,
   BsGear,
   BsTable,
@@ -18,24 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { todayWIBISO, formatTanggalID } from "@/lib/date";
 import { auth } from "@/auth";
 import ExecutiveDashboard from "@/components/ExecutiveDashboard";
-
-const productionProducts = [
-  {
-    title: "Brakeshoe",
-    description: "Form pencatatan produksi produk Brakeshoe",
-    href: "/produksi/brakeshoe",
-  },
-  {
-    title: "Discpad",
-    description: "Form pencatatan produksi produk Discpad",
-    href: "/produksi/discpad",
-  },
-  {
-    title: "Handle",
-    description: "Form pencatatan produksi produk Handle",
-    href: "/produksi/handle",
-  },
-];
+import { listProductionProducts } from "@/lib/production-master";
 
 const operationalLinks = [
   {
@@ -44,32 +26,20 @@ const operationalLinks = [
     href: "/hasil-produksi",
     icon: BsTable,
   },
-  {
-    title: "Stok Opname",
-    detail: "Input dan tinjau stok per periode",
-    href: "/stok-opname",
-    icon: BsBoxSeam,
-  },
-  {
-    title: "Pengajuan Lembur",
-    detail: "Ajukan jadwal dan lampiran bukti",
-    href: "/lembur",
-    icon: BsClockHistory,
-  },
 ];
 
 const administrationLinks = [
-  {
-    title: "Persetujuan Lembur",
-    detail: "Tinjau dan proses pengajuan lembur",
-    href: "/lembur/daftar",
-    icon: BsClockHistory,
-  },
   {
     title: "Master Karyawan",
     detail: "Kelola data karyawan",
     href: "/master",
     icon: BsGear,
+  },
+  {
+    title: "Master Produk & Lini",
+    detail: "Kelola lini dan pilihan formulir produksi",
+    href: "/master/produksi",
+    icon: BsTools,
   },
   {
     title: "Target Produksi",
@@ -129,23 +99,14 @@ function TaskLinks({ items }: { items: typeof operationalLinks }) {
 
 export default async function Dashboard() {
   const session = await auth();
+  const productionProducts = await listProductionProducts();
   const role = session?.user.role;
   const canInput = role === "leader_spv" || role === "superadmin";
-  const canCorrectStock = role === "ppic" || role === "qc" || role === "superadmin";
-  const canReviewOvertime = role === "hrd" || role === "pimpinan" || role === "superadmin";
   const canManage = role === "superadmin";
   const canManageTargets = canManage || role === "ppic";
-  const visibleOperationalLinks = operationalLinks.filter(({ href }) =>
-    href === "/hasil-produksi" || (href === "/stok-opname" ? canInput || canCorrectStock : canInput),
-  );
+  const visibleOperationalLinks = operationalLinks;
   const visibleAdministrationLinks = [
-    ...(canReviewOvertime
-      ? [{
-          ...administrationLinks[0],
-          title: role === "pimpinan" ? "Daftar Lembur" : "Persetujuan Lembur",
-          detail: role === "pimpinan" ? "Lihat pengajuan lembur" : "Tinjau dan proses pengajuan lembur",
-        }]
-      : []),
+    ...(canManage ? [administrationLinks[0]] : []),
     ...(canManage ? [administrationLinks[1]] : []),
     ...(canManageTargets ? [administrationLinks[2]] : []),
   ];
@@ -159,7 +120,7 @@ export default async function Dashboard() {
             Ringkasan Operasional
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Akses pencatatan produksi, laporan, persediaan, dan administrasi.
+            Akses pencatatan produksi, laporan, dan administrasi.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -185,14 +146,14 @@ export default async function Dashboard() {
               Pilih produk akhir untuk membuka formulir pencatatan produksinya.
             </p>
           </div>
-          <Badge variant="outline">3 produk akhir</Badge>
+          <Badge variant="outline">{productionProducts.length} produk akhir</Badge>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {productionProducts.map(({ title, description, href }, index) => (
+          {productionProducts.map(({ kode, nama }, index) => (
             <Link
-              key={href}
-              href={href}
+              key={kode}
+              href={`/produksi/${kode}`}
               className="group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Card className="h-full border-l-4 border-l-primary/70 bg-white transition-colors group-hover:bg-primary/[0.03]">
@@ -201,20 +162,12 @@ export default async function Dashboard() {
                     <span className="rounded-sm bg-primary/10 px-2 py-1 text-[11px] font-semibold tracking-wide text-primary">
                       PRODUK {String(index + 1).padStart(2, "0")}
                     </span>
-                    <BsTools
-                      className="size-[18px] text-primary"
-                      aria-hidden="true"
-                    />
+                    <BsTools className="size-[18px] text-primary" aria-hidden="true" />
                   </div>
-                  <CardTitle className="pt-2 text-lg">{title}</CardTitle>
-                  <CardDescription>{description}</CardDescription>
+                  <CardTitle className="pt-2 text-lg">{nama}</CardTitle>
+                  <CardDescription>Form pencatatan produksi produk {nama}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium text-primary">
-                    Buka formulir{" "}
-                    <BsArrowRight className="size-4" aria-hidden="true" />
-                  </span>
-                </CardContent>
+                <CardContent><span className="inline-flex items-center gap-2 text-sm font-medium text-primary">Buka formulir <BsArrowRight className="size-4" aria-hidden="true" /></span></CardContent>
               </Card>
             </Link>
           ))}
@@ -225,7 +178,7 @@ export default async function Dashboard() {
         <SectionHeading
           id="operations-title"
           title="Operasional"
-          description="Laporan produksi, persediaan, dan pengajuan lembur."
+          description="Laporan produksi dan akses administrasi."
         />
         <TaskLinks items={visibleOperationalLinks} />
       </section>

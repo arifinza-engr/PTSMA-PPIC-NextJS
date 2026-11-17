@@ -16,9 +16,21 @@ type LiniFlags = {
   hasMerk: number;
   hasNg: number;
   hasCat: number;
+  hasMesin: number;
   hasNgB: number;
+  hasAb: number;
+  hasProductionTotal: number;
+  requiresPositiveTotal: number;
+  hasProcess: number;
+  hasShot: number;
+  hasSet: number;
+  hasPcsKg: number;
+  targetMetrics: ("PCS" | "SET" | "SHOT")[];
+  pcsPerSet: number;
+  shotCapacity: number;
 };
 type MasterData = {
+  productName?: string;
   liniOptions: string[];
   linis: LiniFlags[];
   productOptions: {
@@ -32,12 +44,15 @@ type MasterData = {
     posisiHandles?: string[];
     abOptions?: string[];
     warnas?: string[];
+    processes?: string[];
   };
+  paintingProcessOptions?: string[];
 };
 
 const toOptions = (arr: string[]) => arr.map((v) => ({ value: v, label: v }));
 
 type Choice = { value: string; label: string };
+type AssistanceOption = { id: number; nama: string; lini: string | null };
 const selectStyles: StylesConfig<Choice, false> = {
   control: (base, state) => ({
     ...base,
@@ -82,12 +97,6 @@ const selectStyles: StylesConfig<Choice, false> = {
         ? "#dbeafe"
         : "transparent",
   }),
-};
-
-const LINE_LABEL: Record<Line, string> = {
-  brakeshoe: "Brakeshoe",
-  discpad: "Discpad",
-  handle: "Handle",
 };
 
 const EMPTY: Item = {
@@ -146,7 +155,7 @@ function columnsFor(
   }
   if (line === "discpad") {
     const cols: Col[] = [{ key: "kode", label: "Kode", opts: po?.codes ?? [] }];
-    if (flags.nama !== "PACKING")
+    if (flags.hasAb)
       cols.push({ key: "ab", label: "A/B", opts: po?.abOptions ?? [] });
     if (flags.hasCat)
       cols.push({ key: "cat", label: "Cat", opts: po?.coatings ?? [] });
@@ -186,6 +195,7 @@ export default function ProduksiForm({
   const [lini, setLini] = useState("");
   const [operator, setOperator] = useState("");
   const [anggota, setAnggota] = useState<string[]>([]);
+  const [assistedOperators, setAssistedOperators] = useState<AssistanceOption[]>([]);
   const [tanggal, setTanggal] = useState(() => todayWIBISO());
   const [shift, setShift] = useState("Shift 1");
   const [jam, setJam] = useState("");
@@ -194,11 +204,13 @@ export default function ProduksiForm({
   const [setv, setSetv] = useState("");
   const [pcs, setPcs] = useState("");
   const [kg, setKg] = useState("");
-  const [proses, setProses] = useState("Painting 1");
+  const [proses, setProses] = useState("");
   const [jumlahProduksi, setJumlahProduksi] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [items, setItems] = useState<Item[]>([{ ...EMPTY }]);
   const [opts, setOpts] = useState<string[]>([]);
+  const [assistanceOpts, setAssistanceOpts] = useState<AssistanceOption[]>([]);
+  const [assistanceSearch, setAssistanceSearch] = useState("");
   const [msg, setMsg] = useState<{ t: "success" | "error"; v: string } | null>(
     null,
   );
@@ -225,6 +237,17 @@ export default function ProduksiForm({
   );
   const isCasting = !!flags.isCasting;
   const isTeam = !!flags.isTeam;
+  const processOptions = master?.paintingProcessOptions ?? master?.productOptions.processes ?? [];
+  useEffect(() => {
+    if (flags.hasProcess && processOptions.length && !processOptions.includes(proses)) setProses(processOptions[0]);
+  }, [flags.hasProcess, processOptions, proses]);
+  const visibleAssistanceOptions = useMemo(() => {
+    const query = assistanceSearch.trim().toLocaleLowerCase("id");
+    if (!query) return assistanceOpts;
+    return assistanceOpts.filter((employee) =>
+      `${employee.nama} ${employee.lini ?? ""}`.toLocaleLowerCase("id").includes(query),
+    );
+  }, [assistanceOpts, assistanceSearch]);
   const cols = useMemo(
     () => columnsFor(line, flags, master),
     [line, flags, master],
@@ -233,10 +256,12 @@ export default function ProduksiForm({
   useEffect(() => {
     if (!lini) return;
     (async () => {
-      const r = await fetch(
-        `/api/produksi/${line}/operators?lini=${encodeURIComponent(lini)}`,
-      );
-      setOpts(r.ok ? await r.json() : []);
+      const [regularResponse, assistanceResponse] = await Promise.all([
+        fetch(`/api/produksi/${line}/operators?lini=${encodeURIComponent(lini)}`),
+        fetch(`/api/produksi/${line}/operators?type=assistance&lini=${encodeURIComponent(lini)}`),
+      ]);
+      setOpts(regularResponse.ok ? await regularResponse.json() : []);
+      setAssistanceOpts(assistanceResponse.ok ? await assistanceResponse.json() : []);
     })();
   }, [lini, line]);
 
@@ -254,10 +279,11 @@ export default function ProduksiForm({
         setShift(record.header.shift);
         setJam(record.header.jamKerja === "-" ? "" : record.header.jamKerja);
         setKeterangan(record.header.keterangan || "");
-        setProses(record.header.proses || "Painting 1");
+        setProses(record.header.proses || master.paintingProcessOptions?.[0] || master.productOptions.processes?.[0] || "");
         setJumlahProduksi(String(record.header.qtyTotal ?? ""));
         setOperator(record.operators[0] || "");
         setAnggota(record.operators);
+        setAssistedOperators((record.assistedOperators || []).map((employee: { id: number; nama: string; liniAsal: string | null }) => ({ id: employee.id, nama: employee.nama, lini: employee.liniAsal })));
         const first = record.items[0] || {};
         setMesin(first.mesin || "");
         setShot(String(first.qtyShot ?? ""));
@@ -319,8 +345,8 @@ export default function ProduksiForm({
         return setMsg({ t: "error", v: "Minimal pilih 1 anggota tim." });
     } else {
       operatorVal = operator;
-      if (!operatorVal)
-        return setMsg({ t: "error", v: "Operator wajib dipilih." });
+      if (!operatorVal && !assistedOperators.length)
+        return setMsg({ t: "error", v: "Pilih operator lini ini atau minimal satu operator perbantuan." });
     }
 
     let payloadItems: Record<string, string | number>[] = [];
@@ -361,14 +387,10 @@ export default function ProduksiForm({
     }
     if (!payloadItems.length)
       return setMsg({ t: "error", v: "Detail produksi minimal 1 item." });
-    if (
-      line === "discpad" &&
-      lini === "PACKING" &&
-      Number(jumlahProduksi) <= 0
-    ) {
+    if (flags.requiresPositiveTotal && Number(jumlahProduksi) <= 0) {
       return setMsg({
         t: "error",
-        v: "Jumlah Produksi (SET) wajib lebih dari nol untuk PACKING.",
+        v: "Jumlah produksi lini ini wajib lebih dari nol.",
       });
     }
 
@@ -380,23 +402,24 @@ export default function ProduksiForm({
       keterangan,
       operator: operatorVal,
       anggotaTim,
+      assistedOperators: assistedOperators.map(({ id, nama }) => ({ id, nama })),
       items: payloadItems,
     };
     if (line === "brakeshoe" || line === "handle") {
-      payload.mesin = mesin;
-      payload.jumlahShot = num(shot);
-      payload.jumlahSet = num(setv);
-      if (line === "brakeshoe" || line === "handle") {
+      if (flags.hasMesin) payload.mesin = mesin;
+      if (flags.hasShot) payload.jumlahShot = num(shot);
+      if (flags.hasSet) payload.jumlahSet = num(setv);
+      if (flags.hasPcsKg) {
         payload.jumlahPcs = num(pcs);
         payload.jumlahKg = num(kg);
       }
     }
     if (line === "discpad") {
-      if (lini === "PAINTING") payload.proses = proses;
+      if (flags.hasProcess) payload.proses = proses;
       payload.jumlahProduksi = num(jumlahProduksi);
       if (jumlahProduksi === "") return setMsg({ t: "error", v: "Jumlah Produksi (PCS) wajib diisi." });
-      if (lini === "PRESS CETAK") payload.jumlahShot = shot === "" ? null : num(shot);
-      else payload.jumlahSet = jumlahProduksi === "" ? null : Number(jumlahProduksi) / 2;
+      if (flags.hasShot) payload.jumlahShot = shot === "" ? null : num(shot);
+      if (flags.hasSet) payload.jumlahSet = jumlahProduksi === "" ? null : Number(jumlahProduksi) / (flags.pcsPerSet || 1);
     }
 
     const validation = productionSchema.safeParse(payload);
@@ -435,6 +458,7 @@ export default function ProduksiForm({
         setKeterangan("");
         setOperator("");
         setAnggota([]);
+        setAssistedOperators([]);
       }
     } catch (e) {
       setMsg({ t: "error", v: (e as Error).message });
@@ -450,9 +474,9 @@ export default function ProduksiForm({
     <div className="production-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Produksi / {LINE_LABEL[line]}</p>
+          <p className="eyebrow">Produksi / {master.productName || line}</p>
           <h1>
-            {editId ? "Ubah" : "Form"} Produksi {LINE_LABEL[line]}
+            {editId ? "Ubah" : "Form"} Produksi {master.productName || line}
           </h1>
           <p>
             Catat informasi shift, operator, dan detail hasil produksi dalam
@@ -481,7 +505,10 @@ export default function ProduksiForm({
                 setLini(opt?.value || "");
                 setOperator("");
                 setAnggota([]);
+                setAssistedOperators([]);
+                setAssistanceSearch("");
                 setOpts([]);
+                setAssistanceOpts([]);
                 setJumlahProduksi("");
                 setShot("");
               }}
@@ -504,6 +531,9 @@ export default function ProduksiForm({
                 className="mt-1"
                 styles={selectStyles}
               />
+              <span className="mt-1 block text-xs text-zinc-500">
+                Boleh dikosongkan jika operator yang bertugas hanya karyawan perbantuan.
+              </span>
             </label>
           )}
 
@@ -543,7 +573,7 @@ export default function ProduksiForm({
             />
           </label>
 
-          {line === "discpad" && lini === "PAINTING" && (
+          {flags.hasProcess === 1 && (
             <label className="block">
               <span className="text-sm font-medium">Proses</span>
               <select
@@ -551,13 +581,12 @@ export default function ProduksiForm({
                 onChange={(e) => setProses(e.target.value)}
                 className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
               >
-                <option>Painting 1</option>
-                <option>Painting 2</option>
+                {(master?.paintingProcessOptions ?? master?.productOptions.processes ?? []).map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
           )}
 
-          {line === "discpad" && lini && (
+          {flags.hasProductionTotal === 1 && lini && (
             <>
               <label className="block">
                 <span className="text-sm font-medium">
@@ -571,7 +600,7 @@ export default function ProduksiForm({
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
               </label>
-              {lini === "PRESS CETAK" ? (
+              {flags.hasShot === 1 && flags.hasSet !== 1 ? (
                 <label className="block">
                   <span className="text-sm font-medium">Jumlah Produksi (Shot)</span>
                   <input
@@ -588,7 +617,7 @@ export default function ProduksiForm({
                   <input
                     type="number"
                     step="any"
-                    value={jumlahProduksi === "" ? "" : Number(jumlahProduksi) / 2}
+                    value={jumlahProduksi === "" ? "" : Number(jumlahProduksi) / (flags.pcsPerSet || 1)}
                     readOnly
                     className="mt-1 w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800 dark:border-zinc-700"
                   />
@@ -597,6 +626,41 @@ export default function ProduksiForm({
             </>
           )}
         </div>
+
+        {lini && (
+          <fieldset className="border border-amber-300 rounded-lg p-3 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20">
+            <legend className="px-2 text-sm font-medium">Perbantuan dari lini lain</legend>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-2">
+              Pilih karyawan aktif yang lini utamanya berbeda. Nama mereka akan ditandai sebagai perbantuan di laporan.
+            </p>
+            <input
+              type="search"
+              value={assistanceSearch}
+              onChange={(event) => setAssistanceSearch(event.target.value)}
+              placeholder="Cari nama atau lini asal..."
+              aria-label="Cari operator perbantuan berdasarkan nama atau lini asal"
+              className="mb-3 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
+            />
+            {assistanceOpts.length ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-auto">
+                {visibleAssistanceOptions.map((name) => (
+                  <label key={name.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={assistedOperators.some((employee) => employee.id === name.id)}
+                      onChange={() => setAssistedOperators((selected) => selected.some((employee) => employee.id === name.id) ? selected.filter((employee) => employee.id !== name.id) : [...selected, name])}
+                      className="rounded accent-amber-600"
+                    />
+                    <span>{name.nama} <span className="text-amber-700 dark:text-amber-400">(dari {name.lini || "lini belum diatur"})</span></span>
+                  </label>
+                ))}
+              </div>
+            ) : <p className="text-sm text-zinc-500">Tidak ada karyawan aktif dari lini lain.</p>}
+            {assistanceOpts.length > 0 && visibleAssistanceOptions.length === 0 && (
+              <p className="text-sm text-zinc-500">Tidak ada karyawan yang cocok dengan pencarian.</p>
+            )}
+          </fieldset>
+        )}
 
         {isTeam && (
           <fieldset className="border border-zinc-300 rounded-lg p-3 dark:border-zinc-700">
@@ -628,15 +692,15 @@ export default function ProduksiForm({
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <label className="block">
+              {flags.hasMesin === 1 && <label className="block">
                 <span className="text-sm font-medium">Mesin</span>
                 <input
                   value={mesin}
                   onChange={(e) => setMesin(e.target.value)}
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
-              </label>
-              <label className="block">
+              </label>}
+              {flags.hasShot === 1 && <label className="block">
                 <span className="text-sm font-medium">Jumlah Shot</span>
                 <input
                   type="number"
@@ -644,8 +708,8 @@ export default function ProduksiForm({
                   onChange={(e) => setShot(e.target.value)}
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
-              </label>
-              <label className="block">
+              </label>}
+              {flags.hasSet === 1 && <label className="block">
                 <span className="text-sm font-medium">Jumlah Set</span>
                 <input
                   type="number"
@@ -653,8 +717,8 @@ export default function ProduksiForm({
                   onChange={(e) => setSetv(e.target.value)}
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
-              </label>
-              {(line === "brakeshoe" || line === "handle") && (
+              </label>}
+              {flags.hasPcsKg === 1 && (
                 <>
                   <label className="block">
                     <span className="text-sm font-medium">Jumlah Pcs</span>

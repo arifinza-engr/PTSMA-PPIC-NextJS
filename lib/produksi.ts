@@ -1,20 +1,22 @@
 // Backend produksi ter-unifikasi (brakeshoe / discpad / handle).
 // Port dari brakeshoe.gs + discpad.gs + handle.gs, di-deduplikasi lewat flag lini.
 
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { db } from "@/db";
 import {
   auditLog,
   karyawan,
+  productionTarget,
   produksiBrakeshoe,
   produksiDiscpad,
   produksiHandle,
 } from "@/db/schema";
-import { clean, isRemovedLini, normalizeLini, now, toFloat, toInt, uniqSort } from "./shared";
+import { clean, normalizeLini, now, toFloat, toInt, uniqSort } from "./shared";
 import { isValidISODate } from "./date";
 import { parseProduction } from "./validation";
-import { FORM_MASTER } from "./form-options";
+import { getProductionLine, getProductionProduct } from "./production-master";
+import type { ProductionLineConfig, ProductionOptions } from "./production-master-types";
 
 export type Line = "brakeshoe" | "discpad" | "handle";
 type ProductionPayload = ReturnType<typeof parseProduction>;
@@ -22,7 +24,7 @@ type ProductionItemPayload = ProductionPayload["items"][number];
 type ProductionQuery = { lini?: string | null; from?: string | null; to?: string | null; limit?: number | string | null };
 type ReportCell = string | number | null;
 
-type LineConfig = (typeof FORM_MASTER.lines)[number];
+type LineConfig = ProductionLineConfig;
 type Prod = typeof produksiBrakeshoe.$inferSelect;
 type Item = Record<string, string | number | null>;
 type ProductionTable = typeof produksiBrakeshoe | typeof produksiDiscpad | typeof produksiHandle;
@@ -36,7 +38,7 @@ function productionTable(line: Line): ProductionTable {
 async function getLiniRow(line: string, nama: string) {
   const d = normalizeLini(line, nama);
   if (!d) return undefined;
-  return FORM_MASTER.lines.find((row) => row.jenis === line && row.nama === d);
+  return getProductionLine(line, d, true);
 }
 
 async function validateKaryawan(name: string, liniName: string): Promise<void> {
@@ -52,45 +54,42 @@ async function validateKaryawan(name: string, liniName: string): Promise<void> {
 
 // ---------------- master ----------------
 
-async function buildProductOptions(line: string) {
-  const options = FORM_MASTER.products[line as keyof typeof FORM_MASTER.products];
-  if (!options) throw new Error("Jenis produk tidak dikenal: " + line);
+function buildProductOptions(line: string, options: ProductionOptions) {
   if (line === "brakeshoe") return { types: options.types, grades: options.grades, kulits: options.kulits };
   if (line === "discpad") return { codes: options.codes, tebals: options.tebals, coatings: options.coatings, abOptions: options.abOptions };
   return { typeHandles: options.typeHandles, warnas: options.warnas, posisiHandles: options.posisiHandles };
 }
 
-export async function getMaster(line: string, liniName?: string) {
-  const configuredLines = FORM_MASTER.lines.filter((row) => row.jenis === line);
-  if (!configuredLines.length) throw new Error("Jenis produk tidak dikenal: " + line);
+export async function getMaster(line: string, liniName?: string, includeInactive = false) {
+  const product = await getProductionProduct(line, includeInactive);
+  if (!product) throw new Error("Jenis produk tidak aktif atau tidak dikenal: " + line);
+  const configuredLines = product.lines.filter((row) => includeInactive || row.isActive === 1);
   let liniOptions = configuredLines.map((row) => row.nama);
-  let linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB }) =>
-    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB }));
+  let linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics }) =>
+    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics }));
   const operatorOptions = liniName ? await getOperators(line, liniName) : [];
-  const productOptions = await buildProductOptions(line);
+  const productOptions = buildProductOptions(line, product.options);
   const refreshDelayMs = line === "discpad" ? 3000 : 15000;
-
-  if (line === "brakeshoe") {
-    liniOptions = liniOptions.filter((n) => !isRemovedLini(n));
-    linis = linis.filter((d) => !isRemovedLini(d.nama));
-  }
+  const productName = product.nama;
 
   liniOptions.sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base", numeric: true }));
 
   if (line === "discpad") {
     return {
+      productName,
       liniOptions,
       linis,
       operatorOptions,
       teamMemberOptions: operatorOptions,
       productOptions,
-      paintingProcessOptions: ["Painting 1", "Painting 2"],
+      paintingProcessOptions: product.options.processes,
       abOptions: productOptions.abOptions,
       refreshDelayMs,
     };
   }
   if (line === "handle") {
     return {
+      productName,
       liniOptions,
       linis,
       operatorOptions,
@@ -99,7 +98,7 @@ export async function getMaster(line: string, liniName?: string) {
       refreshDelayMs,
     };
   }
-  return { liniOptions, linis, productOptions, operatorOptions, refreshDelayMs };
+  return { productName, liniOptions, linis, productOptions, operatorOptions, refreshDelayMs };
 }
 
 export async function getOperators(line: string, liniName: string): Promise<string[]> {
@@ -115,9 +114,18 @@ export async function getOperators(line: string, liniName: string): Promise<stri
   );
 }
 
+export async function getAssistanceOperators(line: string, liniName: string) {
+  const d = await getLiniRow(line, liniName);
+  if (!d) return [];
+  return db.select({ id: karyawan.id, nama: karyawan.nama, lini: karyawan.lini })
+    .from(karyawan)
+    .where(and(ne(karyawan.lini, d.nama), eq(karyawan.isActive, 1)))
+    .orderBy(asc(karyawan.lini), asc(karyawan.nama));
+}
+
 // ---------------- submit ----------------
 
-function resolveOperators(d: LineConfig, payload: ProductionPayload): string[] {
+function resolveOperators(d: LineConfig, payload: ProductionPayload, hasAssistance = false): string[] {
   if (d.isTeam) {
     const names = (Array.isArray(payload.anggotaTim) ? payload.anggotaTim : [])
       .map(clean)
@@ -126,7 +134,8 @@ function resolveOperators(d: LineConfig, payload: ProductionPayload): string[] {
     return names;
   }
   const op = clean(payload.operator);
-  if (!op) throw new Error("Operator wajib dipilih.");
+  if (!op && !hasAssistance) throw new Error("Pilih operator lini ini atau minimal satu operator perbantuan.");
+  if (!op) return [];
   return [op];
 }
 
@@ -142,11 +151,11 @@ function buildItem(
       return {
         type: clean(it.type) || "-",
         grade: clean(it.grade) || "-",
-        mesin: clean(payload.mesin) || null,
-        qtyShot: toInt(payload.jumlahShot),
-        qtySet: toInt(payload.jumlahSet),
-        qtyPcs: toInt(payload.jumlahPcs),
-        qtyKg: toFloat(payload.jumlahKg),
+        mesin: d.hasMesin ? clean(payload.mesin) || null : null,
+        qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
+        qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
+        qtyPcs: d.hasPcsKg ? toInt(payload.jumlahPcs) : null,
+        qtyKg: d.hasPcsKg ? toFloat(payload.jumlahKg) : null,
       };
     }
     return {
@@ -162,14 +171,14 @@ function buildItem(
   if (line === "discpad") {
     return {
       kode: clean(it.kode) || null,
-      gradeAb: d.nama === "PACKING" ? null : clean(it.ab) || null,
+      gradeAb: d.hasAb ? clean(it.ab) || null : null,
       cat: d.hasCat ? clean(it.cat) || null : null,
       tebal: clean(it.tebal) || null,
       qty: toInt(it.qty) || 0,
       ng: d.hasNg ? toInt(it.ng) : d.hasNgB ? toInt(it.ngA) : null,
       ngB: d.hasNgB ? toInt(it.ngB) : null,
-      qtySet: d.nama === "PRESS CETAK" ? null : toFloat(payload.jumlahSet),
-      qtyShot: d.nama === "PRESS CETAK" ? toInt(payload.jumlahShot) : null,
+      qtySet: d.hasSet ? toFloat(payload.jumlahSet) : null,
+      qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
     };
   }
 
@@ -180,11 +189,11 @@ function buildItem(
       grade: "-",
       posisiHandle: clean(it.posisiHandle) || null,
       warna: clean(it.warna) || null,
-      mesin: clean(payload.mesin) || null,
-      qtyShot: toInt(payload.jumlahShot),
-      qtySet: toInt(payload.jumlahSet),
-      qtyPcs: toInt(payload.jumlahPcs),
-      qtyKg: toFloat(payload.jumlahKg),
+      mesin: d.hasMesin ? clean(payload.mesin) || null : null,
+      qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
+      qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
+      qtyPcs: d.hasPcsKg ? toInt(payload.jumlahPcs) : null,
+      qtyKg: d.hasPcsKg ? toFloat(payload.jumlahKg) : null,
     };
   }
   return {
@@ -198,8 +207,9 @@ function buildItem(
 
 export async function submitProduksi(line: Line, input: unknown): Promise<string> {
   const payload = parseProduction(input);
+  if (!(await getProductionProduct(line))) throw new Error("Produk tidak aktif atau tidak dikenal.");
   const d = await getLiniRow(line, payload.lini);
-  if (!d) throw new Error("Lini wajib dipilih.");
+  if (!d || d.isActive !== 1) throw new Error("Pilih lini aktif yang valid.");
 
   const tanggal = clean(payload.tanggal);
   if (!isValidISODate(tanggal)) throw new Error("Tanggal tidak valid.");
@@ -211,20 +221,25 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
   if (!items.length) throw new Error("Detail produksi minimal 1 item.");
   if (items.length > 100) throw new Error("Maksimal 100 item per laporan.");
 
-  const operatorNames = resolveOperators(d, payload);
+  const operatorNames = resolveOperators(d, payload, (payload.assistedOperators ?? []).length > 0);
+  const assistedOperatorIds = [...new Set((payload.assistedOperators ?? []).map((employee) => employee.id))];
+  if (operatorNames.some((name) => (payload.assistedOperators ?? []).some((employee) => employee.nama === name))) {
+    throw new Error("Operator yang sama tidak boleh dipilih sebagai operator lini dan perbantuan.");
+  }
   const qtyTotal =
-    line === "discpad"
+    d.hasProductionTotal
       ? toInt(payload.jumlahProduksi ?? payload.hasilProduksi)
       : null;
-  if (line === "discpad" && (qtyTotal == null || qtyTotal < 0)) {
+  if (d.hasProductionTotal && (qtyTotal == null || qtyTotal < 0)) {
     throw new Error("Jumlah produksi (PCS) wajib diisi.");
   }
-  const proses = line === "discpad" && d.nama === "PAINTING" ? clean(payload.proses) : null;
-  if (line === "discpad" && d.nama === "PAINTING" && !["Painting 1", "Painting 2"].includes(proses || "")) {
-    throw new Error("Proses painting harus Painting 1 atau Painting 2.");
+  if (d.requiresPositiveTotal && qtyTotal === 0) throw new Error("Jumlah produksi lini ini wajib lebih dari nol.");
+  const proses = d.hasProcess ? clean(payload.proses) : null;
+  if (d.hasProcess && !((await getProductionProduct(line))?.options.processes ?? []).includes(proses || "")) {
+    throw new Error("Pilih proses yang terdaftar pada master produk.");
   }
   const requestHash = createHash("sha256").update(JSON.stringify({
-    line, lini: d.nama, tanggal, shift, jam, operatorNames, items, qtyTotal, proses,
+    line, lini: d.nama, tanggal, shift, jam, operatorNames, assistedOperatorIds, items, qtyTotal, proses,
     mesin: clean(payload.mesin), shot: payload.jumlahShot, set: payload.jumlahSet,
   })).digest("hex");
 
@@ -235,6 +250,10 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
       )[0];
     if (duplicate) throw new Error("Laporan yang sama baru saja disimpan. Periksa daftar produksi sebelum mengirim ulang.");
     await Promise.all(operatorNames.map((name) => validateKaryawan(name, d.nama)));
+    const assistanceRows = assistedOperatorIds.length ? await tx.select({ id: karyawan.id, nama: karyawan.nama, lini: karyawan.lini })
+      .from(karyawan).where(and(eq(karyawan.isActive, 1), ne(karyawan.lini, d.nama))) : [];
+    const selectedAssistance = assistedOperatorIds.map((id) => assistanceRows.find((employee) => employee.id === id));
+    if (selectedAssistance.some((employee) => !employee)) throw new Error("Karyawan perbantuan tidak aktif atau lini utamanya sudah berubah.");
     const [ins] = await tx.insert(table).values({
         lini: d.nama,
         tanggal,
@@ -245,6 +264,7 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
         requestHash,
         qtyTotal,
         operators: operatorNames,
+        assistedOperators: selectedAssistance.map((employee) => ({ id: employee!.id, nama: employee!.nama, liniAsal: employee!.lini })),
         items: items.map((item) => buildItem(line, d, item, payload)),
         createdAt: now(),
       }).returning({ id: table.id });
@@ -266,12 +286,12 @@ function layoutFor(line: Line, d: LineConfig) {
     ket: isFirst ? p.keterangan ?? "" : "",
     qtyTotal: isFirst ? p.qtyTotal : null,
     qtyPcs: isFirst
-      ? (d.nama === "PACKING" && p.items[0]?.qtySet == null ? null : p.qtyTotal)
+      ? (!d.hasProductionTotal ? null : !d.hasSet && p.items[0]?.qtySet == null ? null : p.qtyTotal)
       : null,
     qtySet: isFirst
       ? (typeof p.items[0]?.qtySet === "number"
         ? p.items[0].qtySet
-        : d.nama === "PACKING" ? p.qtyTotal : p.qtyTotal != null ? Number((p.qtyTotal / 2).toFixed(0)) : null)
+        : !d.hasSet ? null : p.qtyTotal != null ? Number((p.qtyTotal / (d.pcsPerSet || 1)).toFixed(0)) : null)
       : null,
     qtyShot: isFirst ? p.items[0]?.qtyShot ?? null : null,
   });
@@ -288,7 +308,7 @@ function layoutFor(line: Line, d: LineConfig) {
         buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
           const g = grp(p, isFirst, ops);
           const shotQty = Number(it.qtyShot);
-          const pct = shotQty > 0 ? Number((shotQty / 2048).toFixed(4)) : "";
+          const pct = shotQty > 0 && d.shotCapacity > 0 ? Number((shotQty / d.shotCapacity).toFixed(4)) : "";
           return [g.tanggal, g.lini, g.operator, it.type, it.grade, g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg, pct, g.ket];
         },
       };
@@ -313,20 +333,19 @@ function layoutFor(line: Line, d: LineConfig) {
   }
 
   if (line === "discpad") {
-    const isPacking = d.nama === "PACKING";
     const hasCat = !!d.hasCat;
     const hasNg = !!d.hasNg;
-    const hasAb = !isPacking;
+    const hasAb = d.hasAb === 1;
 
     const headers = ["TANGGAL", "LINI", "OPERATOR", "KODE"];
-    if (d.nama === "PAINTING") headers.push("PROSES");
+    if (d.hasProcess) headers.push("PROSES");
     if (hasAb) headers.push("A/B");
     if (hasCat) headers.push("CAT");
     headers.push("TEBAL", "QTY (PCS)");
-    if (isPacking) headers.push("NG A", "NG B");
+    if (d.hasNgB) headers.push("NG A", "NG B");
     else if (hasNg) headers.push("NG");
     headers.push("SHIFT", "JAM");
-    headers.push("JUMLAH PRODUKSI (PCS)", d.nama === "PRESS CETAK" ? "JUMLAH PRODUKSI (SHOT)" : "JUMLAH PRODUKSI (SET)");
+    headers.push("JUMLAH PRODUKSI (PCS)", d.hasShot && !d.hasSet ? "JUMLAH PRODUKSI (SHOT)" : "JUMLAH PRODUKSI (SET)");
     headers.push("KETERANGAN");
 
     return {
@@ -334,15 +353,15 @@ function layoutFor(line: Line, d: LineConfig) {
       buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
         const g = grp(p, isFirst, ops);
         const row: ReportCell[] = [g.tanggal, g.lini, g.operator, it.kode];
-        if (d.nama === "PAINTING") row.push(isFirst ? p.proses : "");
+        if (d.hasProcess) row.push(isFirst ? p.proses : "");
         if (hasAb) row.push(it.gradeAb);
         if (hasCat) row.push(it.cat);
         row.push(it.tebal, it.qty);
-        if (isPacking) row.push(it.ng, it.ngB);
+        if (d.hasNgB) row.push(it.ng, it.ngB);
         else if (hasNg) row.push(it.ng);
         row.push(g.shift, g.jam);
         row.push(g.qtyPcs);
-        row.push(d.nama === "PRESS CETAK" ? g.qtyShot : g.qtySet);
+        row.push(d.hasShot && !d.hasSet ? g.qtyShot : g.qtySet);
         row.push(g.ket);
         return row;
       },
@@ -371,7 +390,7 @@ function layoutFor(line: Line, d: LineConfig) {
 
 export async function getProductionData(line: Line, params: ProductionQuery = {}) {
   const d = await getLiniRow(line, params.lini ?? "");
-  if (!d) return { headers: [], rows: [], recordIds: [], total: 0, limited: false };
+  if (!d) return { headers: [], rows: [], recordIds: [], assistedRows: [], total: 0, limited: false };
 
   const { headers: reportHeaders, buildRow } = layoutFor(line, d);
 
@@ -385,6 +404,10 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     throw new Error("Batas baris harus 1 sampai 10000.");
   }
   const table = productionTable(line);
+  const lineTargets = await db.select().from(productionTarget).where(and(
+    eq(productionTarget.produk, line),
+    eq(productionTarget.lini, d.nama),
+  ));
   const conditions = [eq(table.lini, d.nama)];
   if (from) conditions.push(gte(table.tanggal, from));
   if (to) conditions.push(lte(table.tanggal, to));
@@ -403,23 +426,49 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
   const rows: ReportCell[][] = [];
   const seen = new Set<number>();
   const recordIds: number[] = [];
+  const assistedRows: boolean[] = [];
   for (const { header, item } of selected) {
     const ops = header.operators;
-    const opsStr = d.isTeam && ops.length > 1
+    const regularOpsStr = d.isTeam && ops.length > 1
       ? `${ops.join(", ")} (${ops.length} Orang)`
       : ops.join(", ");
-    rows.push(buildRow(header, item, !seen.has(header.id), opsStr));
+    const assistanceStr = (header.assistedOperators ?? []).map((employee) => `${employee.nama} (Perbantuan dari ${employee.liniAsal})`).join(", ");
+    const opsStr = [regularOpsStr, assistanceStr].filter(Boolean).join(", ");
+    const isFirst = !seen.has(header.id);
+    const row = buildRow(header, item, isFirst, opsStr);
+    if (isFirst) {
+      const targets = lineTargets
+        .filter((target) => target.shift === header.shift || target.shift === "Shift 1 & 2")
+        .sort((a, b) => ["PCS", "SET", "SHOT"].indexOf(a.satuan) - ["PCS", "SET", "SHOT"].indexOf(b.satuan));
+      const targetText = targets.length
+        ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")} (${target.basis === "per_orang" ? "per orang" : "tim"})`).join("; ")
+        : "Master blm diisi";
+      const hours = toFloat(header.jamKerja);
+      const hourlyTargetText = targets.length
+        ? hours != null && hours > 0
+          ? targets.map((target) => `${target.satuan} ${(target.nilai / hours).toLocaleString("id-ID", { maximumFractionDigits: 2 })}/jam`).join("; ")
+          : "Jam kerja blm diisi"
+        : "Master blm diisi";
+      row.push(targetText, hourlyTargetText);
+    } else {
+      row.push("", "");
+    }
+    rows.push(row);
     recordIds.push(header.id);
+    assistedRows.push((header.assistedOperators ?? []).length > 0);
     seen.add(header.id);
   }
-  return { headers: reportHeaders, rows, recordIds, total, limited };
+  return {
+    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM"],
+    rows, recordIds, assistedRows, total, limited,
+  };
 }
 
 export async function getProductionRecord(id: number, line: Line) {
   const table = productionTable(line);
   const [header] = await db.select().from(table).where(eq(table.id, id));
   if (!header) throw new Error("Laporan produksi tidak ditemukan.");
-  return { header, lini: header.lini, line, items: header.items, operators: header.operators };
+  return { header, lini: header.lini, line, items: header.items, operators: header.operators, assistedOperators: header.assistedOperators ?? [] };
 }
 
 export async function updateProductionRecord(id: number, line: Line, input: unknown) {
@@ -432,17 +481,26 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
   if (!isValidISODate(tanggal)) throw new Error("Tanggal tidak valid.");
   const items = payload.items;
   if (!Array.isArray(items) || !items.length || items.length > 100) throw new Error("Jumlah item tidak valid.");
-  if (line === "discpad" && toInt(payload.jumlahProduksi ?? payload.hasilProduksi) == null) {
+  if (d.hasProductionTotal && toInt(payload.jumlahProduksi ?? payload.hasilProduksi) == null) {
     throw new Error("Jumlah produksi (PCS) wajib diisi.");
   }
-  const proses = line === "discpad" && d.nama === "PAINTING" ? clean(payload.proses) : null;
-  if (line === "discpad" && d.nama === "PAINTING" && !["Painting 1", "Painting 2"].includes(proses || "")) {
-    throw new Error("Proses painting tidak valid.");
+  if (d.requiresPositiveTotal && toInt(payload.jumlahProduksi ?? payload.hasilProduksi) === 0) throw new Error("Jumlah produksi lini ini wajib lebih dari nol.");
+  const proses = d.hasProcess ? clean(payload.proses) : null;
+  if (d.hasProcess && !((await getProductionProduct(line))?.options.processes ?? []).includes(proses || "")) {
+    throw new Error("Pilih proses yang terdaftar pada master produk.");
   }
   const table = productionTable(line);
-  const operators = resolveOperators(d, payload);
+  const operators = resolveOperators(d, payload, (payload.assistedOperators ?? []).length > 0);
+  const assistedOperatorIds = [...new Set((payload.assistedOperators ?? []).map((employee) => employee.id))];
+  if (operators.some((name) => (payload.assistedOperators ?? []).some((employee) => employee.nama === name))) {
+    throw new Error("Operator yang sama tidak boleh dipilih sebagai operator lini dan perbantuan.");
+  }
   const normalizedItems = items.map((item) => buildItem(line, d, item, payload));
   await Promise.all(operators.map((name) => validateKaryawan(name, d.nama)));
+  const assistanceRows = assistedOperatorIds.length ? await db.select({ id: karyawan.id, nama: karyawan.nama, lini: karyawan.lini })
+    .from(karyawan).where(and(eq(karyawan.isActive, 1), ne(karyawan.lini, d.nama))) : [];
+  const selectedAssistance = assistedOperatorIds.map((employeeId) => assistanceRows.find((employee) => employee.id === employeeId));
+  if (selectedAssistance.some((employee) => !employee)) throw new Error("Karyawan perbantuan tidak aktif atau lini utamanya sudah berubah.");
   await db.transaction(async tx => {
     await tx.insert(auditLog).values({
       entity: "produksi", entityId: id, aksi: "update", actor: "admin",
@@ -452,8 +510,8 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
       lini: d.nama, tanggal,
       shift: clean(payload.shift) || "-", jamKerja: clean(payload.jamKerja || payload.jam) || "-",
       keterangan: clean(payload.keterangan) || null, proses,
-      qtyTotal: line === "discpad" ? toInt(payload.jumlahProduksi ?? payload.hasilProduksi) : null,
-      operators, items: normalizedItems, requestHash: null, updatedAt: now(),
+      qtyTotal: d.hasProductionTotal ? toInt(payload.jumlahProduksi ?? payload.hasilProduksi) : null,
+      operators, assistedOperators: selectedAssistance.map((employee) => ({ id: employee!.id, nama: employee!.nama, liniAsal: employee!.lini })), items: normalizedItems, requestHash: null, updatedAt: now(),
     }).where(eq(table.id, id));
   });
   return { success: true, id };

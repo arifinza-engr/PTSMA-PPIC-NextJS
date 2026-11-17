@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
+import type { ProductionProductMaster } from "@/lib/production-master-types";
 import {
   Table,
   TableBody,
@@ -62,12 +63,14 @@ interface DataResult {
   limited: boolean;
   lini: string | null;
   recordIds: number[];
+  assistedRows: boolean[];
 }
 
 interface ReportTableRow {
   cells: Cell[];
   recordId?: number;
   sourceIndex: number;
+  assisted: boolean;
 }
 
 const reportTableFeatures = tableFeatures({
@@ -166,10 +169,19 @@ export default function HasilProduksi({
   }, [initialLine, initialLini, initialFrom, initialTo, initialize]);
 
   const queryClient = useQueryClient();
+  const productsQuery = useQuery({
+    queryKey: ["production-products"],
+    queryFn: async () => {
+      const response = await fetch("/api/master/produksi");
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Gagal memuat daftar produk.");
+      return body as ProductionProductMaster[];
+    },
+  });
   const masterQuery = useQuery({
     queryKey: ["production-master", line],
     queryFn: async () => {
-      const response = await fetch(`/api/produksi/${line}/master`);
+      const response = await fetch(`/api/produksi/${line}/master?includeInactive=1`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Gagal memuat master produksi.");
       return (body.liniOptions ?? []) as string[];
@@ -255,6 +267,7 @@ export default function HasilProduksi({
       cells,
       sourceIndex,
       recordId: data?.recordIds?.[sourceIndex],
+      assisted: data?.assistedRows?.[sourceIndex] ?? false,
     })),
     [data],
   );
@@ -363,9 +376,7 @@ export default function HasilProduksi({
                   setPagination((current) => ({ ...current, pageIndex: 0 }));
                 }}
               >
-                <option value="brakeshoe">Brakeshoe</option>
-                <option value="discpad">Discpad</option>
-                <option value="handle">Handle</option>
+                {(productsQuery.data ?? []).map((product) => <option key={product.kode} value={product.kode}>{product.nama}</option>)}
               </Select>
             </div>
 
@@ -553,6 +564,10 @@ export default function HasilProduksi({
           </Card>
 
           {/* Table */}
+          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground" aria-label="Keterangan warna baris laporan">
+            <span className="inline-block size-3 rounded-sm border border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950" />
+            <span>Baris kuning menandakan laporan dengan operator perbantuan.</span>
+          </div>
           <Card className="overflow-hidden border-border/80 shadow-sm">
             <div ref={tableScrollRef} className="max-h-[68vh] overflow-auto">
               <Table className="w-max min-w-full text-sm">
@@ -603,9 +618,9 @@ export default function HasilProduksi({
                       return (
                       <TableRow
                         key={row.id}
-                        className={
-                          virtualRow.index % 2 === 1 ? "bg-muted/20" : "bg-background"
-                        }
+                        className={row.original.assisted
+                          ? "!bg-amber-100/80 hover:!bg-amber-100 dark:!bg-amber-950/50 dark:hover:!bg-amber-950/70"
+                          : virtualRow.index % 2 === 1 ? "bg-muted/20" : "bg-background"}
                       >
                         {row.getAllCells().map((cell) => (
                           <TableCell

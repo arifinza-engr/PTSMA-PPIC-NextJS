@@ -2,10 +2,9 @@
 
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLog, stokOpname } from "@/db/schema";
+import { auditLog, stokOpname, stockOpnameMaster } from "@/db/schema";
 import { clean, now, toInt, uniqSort } from "./shared";
 import { todayWIBISO } from "./date";
-import STOCK_CATALOG from "./stock-options.json";
 
 const MONTHS = [
   { value: 1, label: "Januari" },
@@ -23,14 +22,15 @@ const MONTHS = [
 ];
 
 /**
- * Get hardcoded options for stok opname form:
- * - items: op+kode pairs from the application catalog
+ * Get active options from the stock opname master:
+ * - items: op+kode pairs from the database catalog
  * - codes: unique kode list
  * - powders: unique powder coating list
  * - months: month options
  */
 export async function getStokOpnameMaster() {
-  const rows = STOCK_CATALOG;
+  const rows = await db.select().from(stockOpnameMaster)
+    .where(eq(stockOpnameMaster.isActive, 1)).orderBy(asc(stockOpnameMaster.sortOrder), asc(stockOpnameMaster.kode));
 
   const items: { op: string | null; kode: string | null }[] = [];
   const codes: string[] = [];
@@ -86,8 +86,9 @@ export async function submitStokOpname(payload: {
   if (payload.nilaiA != null && payload.nilaiA !== "" && toInt(payload.nilaiA) === null) throw new Error("Nilai A tidak valid.");
   if (payload.nilaiB != null && payload.nilaiB !== "" && toInt(payload.nilaiB) === null) throw new Error("Nilai B tidak valid.");
 
-  // Resolve op & type from the hardcoded application catalog
-  const p = STOCK_CATALOG.find((row) => row.kode === kode && row.powder === powder);
+  const [p] = await db.select().from(stockOpnameMaster).where(and(
+    eq(stockOpnameMaster.kode, kode), eq(stockOpnameMaster.powder, powder), eq(stockOpnameMaster.isActive, 1),
+  ));
   if (!p) throw new Error("Kombinasi kode dan powder tidak ada di katalog.");
 
   const op = p.op ?? "";
@@ -154,7 +155,7 @@ export async function getStokOpnamePreview(params: {
     ;
   if (!rows.length) return { headers: [], rows: [], sheetName: `${bulan}-${tahun}`, exists: false };
 
-  const catalog = [...STOCK_CATALOG].sort((a, b) => (a.kode ?? "").localeCompare(b.kode ?? ""));
+  const catalog = await db.select().from(stockOpnameMaster).orderBy(asc(stockOpnameMaster.sortOrder), asc(stockOpnameMaster.kode));
   const powders = uniqSort(catalog.map((r) => r.powder));
   const keyed = new Map<string, { op: string; kode: string }>();
   const values = new Map<string, { a: number; b: number }>();

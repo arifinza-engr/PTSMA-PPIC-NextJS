@@ -2,8 +2,7 @@ import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { auditLog, productionTarget, produksiBrakeshoe, produksiDiscpad, produksiHandle } from "@/db/schema";
-import { FORM_MASTER } from "./form-options";
-import { metricsForLine } from "./target-options";
+import { getProductionLine, listProductionProducts } from "./production-master";
 import { now, toFloat } from "./shared";
 import { isValidISODate } from "./date";
 
@@ -22,12 +21,14 @@ const schema = z.object({
   nilai: z.coerce.number().finite().min(0).max(1_000_000_000),
 });
 
-function parseTarget(input: unknown) {
+async function parseTarget(input: unknown) {
   const value = schema.parse(input);
-  if (!FORM_MASTER.lines.some((line) => line.jenis === value.produk && line.nama === value.lini)) {
+  const line = await getProductionLine(value.produk, value.lini);
+  if (!line) {
     throw new Error("Lini tidak dikenal untuk produk tersebut.");
   }
-  if (!metricsForLine(value.produk, value.lini).includes(value.satuan)) {
+  const metrics = line.targetMetrics;
+  if (!metrics.includes(value.satuan)) {
     throw new Error("Satuan target tidak sesuai dengan lini.");
   }
   return value;
@@ -57,7 +58,7 @@ export async function listProductionTargets() {
 }
 
 export async function saveProductionTarget(id: number | null, input: unknown) {
-  const value = parseTarget(input);
+  const value = await parseTarget(input);
   return db.transaction(async (tx) => {
     const before = id ? (await tx.select().from(productionTarget).where(eq(productionTarget.id, id)))[0] : null;
     if (id && !before) throw new Error("Target tidak ditemukan.");
@@ -151,8 +152,9 @@ export async function getTargetPerformance(input: { mode: "day"; date: string } 
     to = `${year}-${month}-${String(new Date(Number(year), Number(month), 0).getDate()).padStart(2, "0")}`;
     periodLabel = input.month;
   }
-  const [targets, brakeshoe, discpad, handle] = await Promise.all([
+  const [targets, products, brakeshoe, discpad, handle] = await Promise.all([
     listProductionTargets(),
+    listProductionProducts(false),
     db.select().from(produksiBrakeshoe).where(and(gte(produksiBrakeshoe.tanggal, from), lte(produksiBrakeshoe.tanggal, to))),
     db.select().from(produksiDiscpad).where(and(gte(produksiDiscpad.tanggal, from), lte(produksiDiscpad.tanggal, to))),
     db.select().from(produksiHandle).where(and(gte(produksiHandle.tanggal, from), lte(produksiHandle.tanggal, to))),
@@ -169,14 +171,14 @@ export async function getTargetPerformance(input: { mode: "day"; date: string } 
     const groups = new Map<string, { label: string; operators: Set<string>; aktual: number; dates: Set<string>; records: number }>();
     for (const { produk, record } of records) {
       if (produk !== target.produk || record.lini !== target.lini || record.shift !== target.shift) continue;
-      const definition = FORM_MASTER.lines.find((line) => line.jenis === produk && line.nama === record.lini);
-      const isShot = Boolean(definition?.isCasting) || (produk === "discpad" && record.lini === "PRESS CETAK");
-      const pcs = produk === "discpad"
+      const definition = products.find((product) => product.kode === produk)?.lines.find((line) => line.nama === record.lini);
+      const isShot = Boolean(definition?.hasShot);
+      const pcs = definition?.hasProductionTotal
         ? toFloat(record.qtyTotal) ?? 0
         : record.items.reduce((sum, item) => sum + (toFloat(item.qty) ?? 0), 0);
       const actual = target.satuan === "SHOT"
         ? (isShot ? toFloat(record.items[0]?.qtyShot) ?? 0 : 0)
-        : target.satuan === "PCS" ? pcs : pcs / 2;
+        : target.satuan === "PCS" ? pcs : pcs / (definition?.pcsPerSet || 1);
       const operators = [...new Set(record.operators.map((name) => name.trim()).filter(Boolean))];
       if (!operators.length) continue;
       const portions = target.basis === "per_orang"

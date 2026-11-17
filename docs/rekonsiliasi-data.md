@@ -4,7 +4,7 @@ Pemeriksaan pada database kanonik tanggal 27 Oktober 2026 menyisakan relasi yang
 
 ## Produk: 35.176 item
 
-Pada snapshot historis, katalog produk berisi 77 baris campuran. Sebanyak 20.376 item berhasil ditautkan ke tepat satu produk; 35.176 item lain belum memiliki pasangan tunggal. Baris terbanyak berasal dari Brakeshoe PER (7.269), BONDING (7.133), GERINDA (4.234), PACKING (2.920), STAMPING (2.478), ALODINE & BARREL (2.448), SPRAY (2.269), dan CASTING (1.722). Katalog operasional kini disimpan sebagai opsi statis aplikasi, bukan tabel master.
+Pada snapshot historis, katalog produk berisi 77 baris campuran. Sebanyak 20.376 item berhasil ditautkan ke tepat satu produk; 35.176 item lain belum memiliki pasangan tunggal. Baris terbanyak berasal dari Brakeshoe PER (7.269), BONDING (7.133), GERINDA (4.234), PACKING (2.920), STAMPING (2.478), ALODINE & BARREL (2.448), SPRAY (2.269), dan CASTING (1.722). Data lini dan opsi produksi aktif kini dikelola melalui master produk di database.
 
 Angka ini menjelaskan relasi historis yang tidak dapat dipastikan. Jangan mengubah baris laporan lama tanpa sumber resmi yang cocok.
 

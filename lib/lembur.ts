@@ -3,16 +3,16 @@
 import { and, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLog, karyawan, lembur } from "@/db/schema";
-import { calcLemburDuration, clean, isRemovedLini, now, uniqSort } from "./shared";
+import { calcLemburDuration, clean, now, uniqSort } from "./shared";
 import { isValidISODate } from "./date";
 import { parseOvertime } from "./validation";
-import { FORM_MASTER } from "./form-options";
+import { getProductionProduct } from "./production-master";
 
 export async function getLemburOptions() {
-  const liniOptions = FORM_MASTER.lines
-    .filter((row) => row.jenis === "brakeshoe")
+  const brakeshoe = await getProductionProduct("brakeshoe");
+  const liniOptions = (brakeshoe?.lines ?? [])
+    .filter((row) => row.isActive === 1)
     .map((row) => row.nama)
-    .filter((n) => !isRemovedLini(n))
     .sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base", numeric: true }));
 
   const atasanRows = await db

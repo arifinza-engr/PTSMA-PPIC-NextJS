@@ -1,0 +1,1 @@
+ALTER TABLE "production_product_master" ALTER COLUMN "options" SET DEFAULT '{"types":[],"grades":[],"kulits":[],"codes":[],"coatings":[],"tebals":[],"abOptions":[],"typeHandles":[],"posisiHandles":[],"warnas":[],"processes":[]}'::jsonb;

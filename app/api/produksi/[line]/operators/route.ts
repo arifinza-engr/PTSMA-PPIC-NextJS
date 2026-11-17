@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { getOperators, type Line } from "@/lib/produksi";
+import { getAssistanceOperators, getOperators, type Line } from "@/lib/produksi";
 import { allRoles, requireRole, requireSameOrigin } from "@/lib/authorize";
 
 export async function GET(
@@ -12,7 +12,10 @@ export async function GET(
   const { line } = await params;
   const lini = req.nextUrl.searchParams.get("lini") ?? "";
   try {
-    return Response.json(await getOperators(line as Line, lini));
+    const options = req.nextUrl.searchParams.get("type") === "assistance"
+      ? await getAssistanceOperators(line, lini)
+      : await getOperators(line, lini);
+    return Response.json(options);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

@@ -92,6 +92,69 @@
       "when": 1793941173561,
       "tag": "0012_curly_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794535064684,
+      "tag": "0013_production_assisted_operators",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794555599396,
+      "tag": "0014_mute_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794556338613,
+      "tag": "0015_tiresome_inertia",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794556602596,
+      "tag": "0016_minor_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794631200000,
+      "tag": "0017_dynamic_line_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794631260000,
+      "tag": "0018_positive_total_rule",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794620404581,
+      "tag": "0019_goofy_scarlet_spider",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794631320000,
+      "tag": "0020_pcs_per_set_rule",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794631380000,
+      "tag": "0021_shot_capacity_rule",
+      "breakpoints": true
     }
   ]
 }

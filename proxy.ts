@@ -13,23 +13,24 @@ export default auth((request) => {
     const role = request.auth.user.role;
     const canInput = role === "leader_spv" || role === "superadmin";
     const canCorrectProduction = role === "ppic" || role === "qc" || role === "superadmin";
-    const canCorrectStock = canCorrectProduction;
     const canManage = role === "superadmin";
+    const canManageEmployees = canManage || role === "ppic";
     const canManageTargets = canManage || role === "ppic";
-    const canReviewOvertime = role === "hrd" || role === "pimpinan" || role === "superadmin";
     const isProductionForm = pathname.startsWith("/produksi/") && !/^\/produksi\/[^/]+\/view\/?$/.test(pathname);
     const isProductionEdit = isProductionForm && /^\d+$/.test(searchParams.get("edit") ?? "");
-    const isStockOpname = pathname === "/stok-opname" || pathname.startsWith("/stok-opname/");
-    const isOvertimeSubmission = pathname === "/lembur" || pathname.startsWith("/lembur/") && pathname !== "/lembur/daftar";
-    const isOvertimeList = pathname === "/lembur/daftar";
-    const isMaster = pathname === "/master" || pathname.startsWith("/master/");
+    const isArchivedStockFeature = pathname === "/stok-opname" || pathname.startsWith("/stok-opname/")
+      || pathname === "/master/stok-opname" || pathname.startsWith("/master/stok-opname/");
+    const isArchivedOvertimeSubmission = pathname === "/lembur";
+    const isArchivedOvertimeList = pathname === "/lembur/daftar";
+    const isEmployeeMaster = pathname === "/master";
+    const isRestrictedMaster = pathname.startsWith("/master/");
     const isTargetMaster = pathname === "/target-produksi" || pathname.startsWith("/target-produksi/");
     const isUserAdmin = pathname === "/pengguna" || pathname.startsWith("/pengguna/");
-    if ((isProductionForm && !(canInput || (canCorrectProduction && isProductionEdit))) || (isStockOpname && !(canInput || canCorrectStock)) || (isOvertimeSubmission && !canInput)) {
+    if (isArchivedStockFeature || isArchivedOvertimeSubmission || isArchivedOvertimeList
+      || (isProductionForm && !(canInput || (canCorrectProduction && isProductionEdit)))) {
       return NextResponse.redirect(new URL("/", request.url));
     }
-    if (isOvertimeList && !canReviewOvertime) return NextResponse.redirect(new URL("/", request.url));
-    if (((isMaster || isUserAdmin) && !canManage) || (isTargetMaster && !canManageTargets)) {
+    if ((isEmployeeMaster && !canManageEmployees) || ((isRestrictedMaster || isUserAdmin) && !canManage) || (isTargetMaster && !canManageTargets)) {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

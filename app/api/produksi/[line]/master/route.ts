@@ -11,8 +11,9 @@ export async function GET(
   const forbidden = await requireRole(allRoles); if (forbidden) return forbidden;
   const { line } = await params;
   const lini = req.nextUrl.searchParams.get("lini") ?? undefined;
+  const includeInactive = req.nextUrl.searchParams.get("includeInactive") === "1";
   try {
-    return Response.json(await getMaster(line as Line, lini));
+    return Response.json(await getMaster(line as Line, lini, includeInactive));
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

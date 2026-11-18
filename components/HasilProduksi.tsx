@@ -185,7 +185,7 @@ export default function HasilProduksi({
   const masterQuery = useQuery({
     queryKey: ["production-master", line],
     queryFn: async () => {
-      const response = await fetch(`/api/produksi/${line}/master?includeInactive=1`);
+      const response = await fetch(`/api/produksi/${line}/master`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Gagal memuat master produksi.");
       return (body.liniOptions ?? []) as string[];

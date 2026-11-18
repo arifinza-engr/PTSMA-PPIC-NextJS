@@ -9,12 +9,18 @@ cd "$APP_DIR"
 
 export PATH="$NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# Keep runtime and schema migration files in sync through Git. Intentionally do not run
-# npm run db:migrate and do not copy, export, or import database data during deployment.
+# Apply the versioned schema migrations against the VPS database configured in its local
+# .env file. This changes schema/master metadata only; it never imports the local database.
 install -m 644 deploy/ppic-nextjs.service /etc/systemd/system/ppic-nextjs.service
 systemctl daemon-reload
 npm ci --no-audit --no-fund
 npm run build
+systemctl stop ppic-nextjs.service || true
+if ! npm run db:migrate; then
+  echo "Database migration failed; attempting to start the existing service." >&2
+  systemctl start ppic-nextjs.service || true
+  exit 1
+fi
 systemctl enable ppic-nextjs.service >/dev/null
 systemctl restart ppic-nextjs.service
 systemctl is-active --quiet ppic-nextjs.service

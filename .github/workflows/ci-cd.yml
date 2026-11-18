@@ -58,4 +58,5 @@ jobs:
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            "$VPS_USER@$VPS_HOST"
+            "$VPS_USER@$VPS_HOST" \
+            "cd /root/PTSMA-PPIC-NextJS && git pull --ff-only origin main && bash scripts/deploy-vps.sh"

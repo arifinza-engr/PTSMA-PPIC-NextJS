@@ -96,8 +96,8 @@ export async function getMaster(line: string, liniName?: string, includeInactive
   const product = await getProductionProduct(line, includeInactive);
   if (!product) throw new Error("Jenis produk tidak aktif atau tidak dikenal: " + line);
   const configuredLines = product.lines.filter((row) => includeInactive || row.isActive === 1);
-  let liniOptions = configuredLines.map((row) => row.nama);
-  let linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields }) =>
+  const liniOptions = configuredLines.map((row) => row.nama);
+  const linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields }) =>
     ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields: detailFields ?? defaultDetailFields(line as Line, isCasting === 1) }));
   const operatorOptions = liniName ? await getOperators(line, liniName) : [];
   const productOptions = buildProductOptions(line, product.options);

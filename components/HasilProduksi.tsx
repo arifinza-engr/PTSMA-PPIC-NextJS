@@ -110,6 +110,10 @@ function formatCell(val: Cell, header: string): string {
   }
 
   const upperHeader = header.toUpperCase();
+  if (upperHeader.includes("PENCAPAIAN TARGET")) {
+    const num = typeof val === "number" ? val : parseFloat(String(val));
+    if (Number.isFinite(num)) return num.toFixed(2) + "%";
+  }
   if (upperHeader.includes("PERSENTASE") || upperHeader.includes("PCT")) {
     const num = typeof val === "number" ? val : parseFloat(String(val));
     if (Number.isFinite(num)) {
@@ -568,23 +572,19 @@ export default function HasilProduksi({
             <span className="inline-block size-3 rounded-sm border border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950" />
             <span>Baris kuning menandakan laporan dengan operator perbantuan.</span>
           </div>
-          <Card className="overflow-hidden border-border/80 shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <div ref={tableScrollRef} className="max-h-[68vh] overflow-auto">
-              <Table className="w-max min-w-full text-sm">
+              <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/70 hover:bg-muted/70">
+                  <TableRow>
                     {table.getHeaderGroups().map((headerGroup) => headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        className="sticky top-0 z-10 whitespace-nowrap border-b bg-muted/95 px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur"
-                      >
+                      <TableHead key={header.id}>
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={header.column.getToggleSortingHandler()}
-                            className="h-8 -ml-3 px-3 text-[11px] font-semibold uppercase tracking-wide"
                           >
                             <table.FlexRender header={header} />
                             {header.column.getIsSorted() === "asc" ? <BsArrowUp aria-hidden="true" /> : header.column.getIsSorted() === "desc" ? <BsArrowDown aria-hidden="true" /> : <BsArrowDownUp aria-hidden="true" />}
@@ -619,14 +619,11 @@ export default function HasilProduksi({
                       <TableRow
                         key={row.id}
                         className={row.original.assisted
-                          ? "!bg-amber-100/80 hover:!bg-amber-100 dark:!bg-amber-950/50 dark:hover:!bg-amber-950/70"
-                          : virtualRow.index % 2 === 1 ? "bg-muted/20" : "bg-background"}
+                          ? "bg-amber-100/80 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-950/70"
+                          : undefined}
                       >
                         {row.getAllCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            className={cell.column.id === "actions" ? "whitespace-nowrap px-4 py-2" : "whitespace-nowrap px-4 py-3 text-xs text-foreground/85"}
-                          >
+                          <TableCell key={cell.id}>
                             <table.FlexRender cell={cell} />
                           </TableCell>
                         ))}
@@ -643,59 +640,59 @@ export default function HasilProduksi({
                 </TableBody>
               </Table>
             </div>
-          </Card>
-          <Card className="mt-3 flex flex-wrap items-center justify-between gap-4 border-border/80 px-4 py-3 text-sm text-muted-foreground shadow-sm">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="results-page-size" className="whitespace-nowrap">
-                Baris per halaman
-              </Label>
-              <Select
-                id="results-page-size"
-                value={pagination.pageSize}
-                onChange={(e) => {
-                  table.setPageSize(Number(e.target.value));
-                }}
-                className="h-9 w-[76px] px-2"
-              >
-                {[10, 25, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </Select>
-              <span>
-                {filteredRows.length
-                  ? `Menampilkan ${pagination.pageIndex * pagination.pageSize + 1}-${Math.min((pagination.pageIndex + 1) * pagination.pageSize, filteredRows.length)} dari ${filteredRows.length} baris`
-                  : "Menampilkan 0 baris"}
-              </span>
+            <div className="flex w-full flex-col items-stretch justify-between gap-4 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="results-page-size" className="whitespace-nowrap">
+                  Baris per halaman
+                </Label>
+                <Select
+                  id="results-page-size"
+                  value={pagination.pageSize}
+                  onChange={(e) => {
+                    table.setPageSize(Number(e.target.value));
+                  }}
+                  className="h-9 w-[76px] px-2"
+                >
+                  {[10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </Select>
+                <span>
+                  {filteredRows.length
+                    ? `Menampilkan ${pagination.pageIndex * pagination.pageSize + 1}-${Math.min((pagination.pageIndex + 1) * pagination.pageSize, filteredRows.length)} dari ${filteredRows.length} baris`
+                    : "Menampilkan 0 baris"}
+                </span>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!table.getCanPreviousPage()}
+                  onClick={() => table.previousPage()}
+                >
+                  <BsArrowLeft /> Sebelumnya
+                </Button>
+                <span className="whitespace-nowrap px-1">
+                  Halaman{" "}
+                  <strong className="text-foreground">
+                    {pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)}
+                  </strong>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!table.getCanNextPage()}
+                  onClick={() => table.nextPage()}
+                >
+                  Berikutnya <BsArrowRight />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!table.getCanPreviousPage()}
-                onClick={() => table.previousPage()}
-              >
-                <BsArrowLeft /> Sebelumnya
-              </Button>
-              <span className="whitespace-nowrap px-1">
-                Halaman{" "}
-                <strong className="text-foreground">
-                  {pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)}
-                </strong>
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!table.getCanNextPage()}
-                onClick={() => table.nextPage()}
-              >
-                Berikutnya <BsArrowRight />
-              </Button>
-            </div>
-          </Card>
+          </div>
         </>
       )}
 

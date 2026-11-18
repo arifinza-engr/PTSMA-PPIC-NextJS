@@ -155,6 +155,20 @@
       "when": 1794631380000,
       "tag": "0021_shot_capacity_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794908681823,
+      "tag": "0022_secret_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794986222008,
+      "tag": "0023_derive_target_basis",
+      "breakpoints": true
     }
   ]
 }

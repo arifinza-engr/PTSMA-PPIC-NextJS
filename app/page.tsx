@@ -101,7 +101,7 @@ export default async function Dashboard() {
   const session = await auth();
   const productionProducts = await listProductionProducts();
   const role = session?.user.role;
-  const canInput = role === "leader_spv" || role === "superadmin";
+  const canInput = role === "ppic" || role === "leader_spv" || role === "superadmin";
   const canManage = role === "superadmin";
   const canManageTargets = canManage || role === "ppic";
   const visibleOperationalLinks = operationalLinks;

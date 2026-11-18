@@ -17,6 +17,7 @@ import { isValidISODate } from "./date";
 import { parseProduction } from "./validation";
 import { getProductionLine, getProductionProduct } from "./production-master";
 import type { ProductionLineConfig, ProductionOptions } from "./production-master-types";
+import { defaultDetailFields } from "./production-detail-fields";
 
 export type Line = "brakeshoe" | "discpad" | "handle";
 type ProductionPayload = ReturnType<typeof parseProduction>;
@@ -33,6 +34,37 @@ function productionTable(line: Line): ProductionTable {
   if (line === "brakeshoe") return produksiBrakeshoe;
   if (line === "discpad") return produksiDiscpad;
   return produksiHandle;
+}
+
+async function validateMachineAssignment(
+  table: ProductionTable,
+  lini: string,
+  tanggal: string,
+  shift: string,
+  mesin: string,
+  operators: string[],
+  excludeId?: number,
+) {
+  const currentOperators = new Set(operators.map(clean).filter(Boolean));
+  const sameShiftRecords = await db.select({
+    id: table.id,
+    operators: table.operators,
+    assistedOperators: table.assistedOperators,
+    items: table.items,
+  }).from(table).where(and(eq(table.lini, lini), eq(table.tanggal, tanggal), eq(table.shift, shift)));
+
+  for (const record of sameShiftRecords) {
+    if (record.id === excludeId || !record.items.some((item) => clean(item.mesin) === mesin)) continue;
+    const existingOperators = new Set([
+      ...record.operators,
+      ...(record.assistedOperators ?? []).map((employee) => employee.nama),
+    ].map(clean).filter(Boolean));
+    const sameOperators = existingOperators.size === currentOperators.size
+      && [...existingOperators].every((operator) => currentOperators.has(operator));
+    if (!sameOperators) {
+      throw new Error(`Mesin ${mesin} sudah dipakai operator lain pada ${shift}. Pilih nomor mesin yang berbeda.`);
+    }
+  }
 }
 
 async function getLiniRow(line: string, nama: string) {
@@ -65,8 +97,8 @@ export async function getMaster(line: string, liniName?: string, includeInactive
   if (!product) throw new Error("Jenis produk tidak aktif atau tidak dikenal: " + line);
   const configuredLines = product.lines.filter((row) => includeInactive || row.isActive === 1);
   let liniOptions = configuredLines.map((row) => row.nama);
-  let linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics }) =>
-    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics }));
+  let linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields }) =>
+    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields: detailFields ?? defaultDetailFields(line as Line, isCasting === 1) }));
   const operatorOptions = liniName ? await getOperators(line, liniName) : [];
   const productOptions = buildProductOptions(line, product.options);
   const refreshDelayMs = line === "discpad" ? 3000 : 15000;
@@ -147,10 +179,14 @@ function buildItem(
 ): Item {
   it = it || {};
   if (line === "brakeshoe") {
+    const fields = d.detailFields ?? [];
     if (d.isCasting) {
       return {
-        type: clean(it.type) || "-",
-        grade: clean(it.grade) || "-",
+        type: fields.includes("type") ? clean(it.type) || "-" : null,
+        grade: fields.includes("grade") ? clean(it.grade) || "-" : null,
+        merk: d.hasMerk ? clean(it.merk) || "-" : null,
+        castingCategory: clean(it.castingCategory) || null,
+        ng: d.hasNg ? toInt(it.ng) : null,
         mesin: d.hasMesin ? clean(payload.mesin) || null : null,
         qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
         qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
@@ -159,9 +195,9 @@ function buildItem(
       };
     }
     return {
-      type: clean(it.type) || "-",
-      grade: clean(it.grade) || "-",
-      kulit: clean(it.kulit) || "-",
+      type: fields.includes("type") ? clean(it.type) || "-" : null,
+      grade: fields.includes("grade") ? clean(it.grade) || "-" : null,
+      kulit: fields.includes("kulit") ? clean(it.kulit) || "-" : null,
       merk: d.hasMerk ? clean(it.merk) || "-" : null,
       qty: toInt(it.qty) || 0,
       ng: d.hasNg ? toInt(it.ng) : null,
@@ -170,10 +206,10 @@ function buildItem(
 
   if (line === "discpad") {
     return {
-      kode: clean(it.kode) || null,
+      kode: d.detailFields?.includes("kode") ? clean(it.kode) || null : null,
       gradeAb: d.hasAb ? clean(it.ab) || null : null,
       cat: d.hasCat ? clean(it.cat) || null : null,
-      tebal: clean(it.tebal) || null,
+      tebal: d.detailFields?.includes("tebal") ? clean(it.tebal) || null : null,
       qty: toInt(it.qty) || 0,
       ng: d.hasNg ? toInt(it.ng) : d.hasNgB ? toInt(it.ngA) : null,
       ngB: d.hasNgB ? toInt(it.ngB) : null,
@@ -185,10 +221,11 @@ function buildItem(
   // handle
   if (d.isCasting) {
     return {
-      typeHandle: clean(it.typeHandle) || "-",
+      typeHandle: d.detailFields?.includes("typeHandle") ? clean(it.typeHandle) || "-" : null,
       grade: "-",
-      posisiHandle: clean(it.posisiHandle) || null,
-      warna: clean(it.warna) || null,
+      ng: d.hasNg ? toInt(it.ng) : null,
+      posisiHandle: d.detailFields?.includes("posisiHandle") ? clean(it.posisiHandle) || null : null,
+      warna: d.detailFields?.includes("warna") ? clean(it.warna) || null : null,
       mesin: d.hasMesin ? clean(payload.mesin) || null : null,
       qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
       qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
@@ -197,11 +234,11 @@ function buildItem(
     };
   }
   return {
-    typeHandle: clean(it.typeHandle) || "-",
-    posisiHandle: clean(it.posisiHandle) || null,
-    warna: clean(it.warna) || "-",
+    typeHandle: d.detailFields?.includes("typeHandle") ? clean(it.typeHandle) || "-" : null,
+    posisiHandle: d.detailFields?.includes("posisiHandle") ? clean(it.posisiHandle) || null : null,
+    warna: d.detailFields?.includes("warna") ? clean(it.warna) || "-" : null,
     qty: toInt(it.qty) || 0,
-    ng: toInt(it.ng),
+    ng: d.hasNg ? toInt(it.ng) : null,
   };
 }
 
@@ -215,11 +252,15 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
   if (!isValidISODate(tanggal)) throw new Error("Tanggal tidak valid.");
   const shift = clean(payload.shift) || "-";
   const jam = clean(payload.jamKerja || payload.jam) || "-";
+  if (!Number.isFinite(Number(jam)) || Number(jam) <= 0 || Number(jam) > 24) {
+    throw new Error("Jam kerja harus berupa angka lebih dari 0 dan maksimal 24 jam.");
+  }
   const keterangan = clean(payload.keterangan) || null;
 
   const items = payload.items;
   if (!items.length) throw new Error("Detail produksi minimal 1 item.");
   if (items.length > 100) throw new Error("Maksimal 100 item per laporan.");
+  if ((d.castingCategories ?? []).length && items.some((item) => !d.castingCategories.includes(clean(item.castingCategory)))) throw new Error("Pilih kategori Casting yang terdaftar pada master lini.");
 
   const operatorNames = resolveOperators(d, payload, (payload.assistedOperators ?? []).length > 0);
   const assistedOperatorIds = [...new Set((payload.assistedOperators ?? []).map((employee) => employee.id))];
@@ -244,6 +285,14 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
   })).digest("hex");
 
   const table = productionTable(line);
+  const machine = clean(payload.mesin);
+  if (d.hasMesin && !/^(?:[1-9]|10)$/.test(machine)) {
+    throw new Error("Nomor mesin harus berupa angka 1 sampai 10.");
+  }
+  if (d.hasMesin) {
+    await validateMachineAssignment(table, d.nama, tanggal, shift, machine,
+      [...operatorNames, ...(payload.assistedOperators ?? []).map((employee) => employee.nama)]);
+  }
   await db.transaction(async (tx) => {
     const duplicate = (await tx.select({ id: table.id }).from(table)
       .where(and(eq(table.requestHash, requestHash), gte(table.createdAt, new Date(Date.now() - 60_000).toISOString())))
@@ -297,23 +346,37 @@ function layoutFor(line: Line, d: LineConfig) {
   });
 
   if (line === "brakeshoe") {
+    const fields = d.detailFields ?? [];
     if (d.isCasting) {
       const headers = [
-        "TANGGAL", "LINI", "OPERATOR", "TYPE", "GRADE", "SHIFT", "MESIN",
+        "TANGGAL", "LINI", "OPERATOR",
+        ...(fields.includes("type") ? ["TYPE"] : []), ...(fields.includes("grade") ? ["GRADE"] : []),
+        ...(d.hasMerk ? ["MERK"] : []),
+        ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "SHIFT", "MESIN",
         "JAM KERJA", "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET",
-        "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG", "PERSENTASE", "KETERANGAN",
+        "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG",
+        ...(d.hasNg ? ["TOTAL NG"] : []), "KETERANGAN",
       ];
       return {
         headers,
         buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
           const g = grp(p, isFirst, ops);
-          const shotQty = Number(it.qtyShot);
-          const pct = shotQty > 0 && d.shotCapacity > 0 ? Number((shotQty / d.shotCapacity).toFixed(4)) : "";
-          return [g.tanggal, g.lini, g.operator, it.type, it.grade, g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg, pct, g.ket];
+          const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+          if (fields.includes("type")) row.push(it.type);
+          if (fields.includes("grade")) row.push(it.grade);
+          if (d.hasMerk) row.push(it.merk);
+          if ((d.castingCategories ?? []).length) row.push(it.castingCategory);
+          row.push(g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg);
+          if (d.hasNg) row.push(it.ng);
+          row.push(g.ket);
+          return row;
         },
       };
     }
-    const headers = ["TANGGAL", "LINI", d.isTeam ? "OPERATOR / ANGGOTA TIM" : "OPERATOR", "TYPE", "GRADE", "KULIT"];
+    const headers = ["TANGGAL", "LINI", d.isTeam ? "OPERATOR / ANGGOTA TIM" : "OPERATOR"];
+    if (fields.includes("type")) headers.push("TYPE");
+    if (fields.includes("grade")) headers.push("GRADE");
+    if (fields.includes("kulit")) headers.push("KULIT");
     if (d.hasMerk) headers.push("MERK");
     headers.push("SHIFT", "JAM KERJA", "TOTAL JUMLAH PRODUKSI");
     if (d.hasNg) headers.push("TOTAL NG");
@@ -322,7 +385,10 @@ function layoutFor(line: Line, d: LineConfig) {
       headers,
       buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
         const g = grp(p, isFirst, ops);
-        const row: ReportCell[] = [g.tanggal, g.lini, g.operator, it.type, it.grade, it.kulit];
+        const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+        if (fields.includes("type")) row.push(it.type);
+        if (fields.includes("grade")) row.push(it.grade);
+        if (fields.includes("kulit")) row.push(it.kulit);
         if (d.hasMerk) row.push(it.merk);
         row.push(g.shift, g.jam, it.qty);
         if (d.hasNg) row.push(it.ng);
@@ -333,15 +399,18 @@ function layoutFor(line: Line, d: LineConfig) {
   }
 
   if (line === "discpad") {
+    const fields = d.detailFields ?? [];
     const hasCat = !!d.hasCat;
     const hasNg = !!d.hasNg;
     const hasAb = d.hasAb === 1;
 
-    const headers = ["TANGGAL", "LINI", "OPERATOR", "KODE"];
+    const headers = ["TANGGAL", "LINI", "OPERATOR"];
+    if (fields.includes("kode")) headers.push("KODE");
     if (d.hasProcess) headers.push("PROSES");
     if (hasAb) headers.push("A/B");
     if (hasCat) headers.push("CAT");
-    headers.push("TEBAL", "QTY (PCS)");
+    if (fields.includes("tebal")) headers.push("TEBAL");
+    headers.push("QTY (PCS)");
     if (d.hasNgB) headers.push("NG A", "NG B");
     else if (hasNg) headers.push("NG");
     headers.push("SHIFT", "JAM");
@@ -352,11 +421,13 @@ function layoutFor(line: Line, d: LineConfig) {
       headers,
       buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
         const g = grp(p, isFirst, ops);
-        const row: ReportCell[] = [g.tanggal, g.lini, g.operator, it.kode];
+        const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+        if (fields.includes("kode")) row.push(it.kode);
         if (d.hasProcess) row.push(isFirst ? p.proses : "");
         if (hasAb) row.push(it.gradeAb);
         if (hasCat) row.push(it.cat);
-        row.push(it.tebal, it.qty);
+        if (fields.includes("tebal")) row.push(it.tebal);
+        row.push(it.qty);
         if (d.hasNgB) row.push(it.ng, it.ngB);
         else if (hasNg) row.push(it.ng);
         row.push(g.shift, g.jam);
@@ -370,9 +441,16 @@ function layoutFor(line: Line, d: LineConfig) {
 
   // handle
   const isCasting = !!d.isCasting;
+  const fields = d.detailFields ?? [];
   const headers = ["LINI", "OPERATOR", "TANGGAL", "SHIFT", "JAM KERJA"];
-  if (isCasting) headers.push("MESIN", "TYPE HANDLE", "POSISI HANDLE", "WARNA", "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET", "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG");
-  else headers.push("TYPE HANDLE", "POSISI HANDLE", "WARNA", "TOTAL JUMLAH PRODUKSI", "TOTAL NG");
+  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "MESIN", ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET", "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG", ...(d.hasNg ? ["TOTAL NG"] : []));
+  else {
+    if (fields.includes("typeHandle")) headers.push("TYPE HANDLE");
+    if (fields.includes("posisiHandle")) headers.push("POSISI HANDLE");
+    if (fields.includes("warna")) headers.push("WARNA");
+    headers.push("TOTAL JUMLAH PRODUKSI");
+    if (d.hasNg) headers.push("TOTAL NG");
+  }
   headers.push("KETERANGAN");
 
   return {
@@ -380,8 +458,20 @@ function layoutFor(line: Line, d: LineConfig) {
     buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
       const g = grp(p, isFirst, ops);
         const row: ReportCell[] = [g.lini, g.operator, g.tanggal, g.shift, g.jam];
-      if (isCasting) row.push(it.mesin, it.typeHandle, it.posisiHandle, it.warna, it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg);
-      else row.push(it.typeHandle, it.posisiHandle, it.warna, it.qty, it.ng);
+      if (isCasting) {
+        row.push(...((d.castingCategories ?? []).length ? [it.castingCategory] : []), it.mesin);
+        if (fields.includes("typeHandle")) row.push(it.typeHandle);
+        if (fields.includes("posisiHandle")) row.push(it.posisiHandle);
+        if (fields.includes("warna")) row.push(it.warna);
+        row.push(it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg);
+        if (d.hasNg) row.push(it.ng);
+      } else {
+        if (fields.includes("typeHandle")) row.push(it.typeHandle);
+        if (fields.includes("posisiHandle")) row.push(it.posisiHandle);
+        if (fields.includes("warna")) row.push(it.warna);
+        row.push(it.qty);
+        if (d.hasNg) row.push(it.ng);
+      }
       row.push(g.ket);
       return row;
     },
@@ -438,10 +528,11 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     const row = buildRow(header, item, isFirst, opsStr);
     if (isFirst) {
       const targets = lineTargets
-        .filter((target) => target.shift === header.shift || target.shift === "Shift 1 & 2")
+        .filter((target) => (target.shift === header.shift || target.shift === "Shift 1 & 2")
+          && (target.kategori ?? "") === clean(item.castingCategory))
         .sort((a, b) => ["PCS", "SET", "SHOT"].indexOf(a.satuan) - ["PCS", "SET", "SHOT"].indexOf(b.satuan));
       const targetText = targets.length
-        ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")} (${target.basis === "per_orang" ? "per orang" : "tim"})`).join("; ")
+        ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")} (${d.isTeam ? "tim" : "per orang"})`).join("; ")
         : "Master blm diisi";
       const hours = toFloat(header.jamKerja);
       const hourlyTargetText = targets.length
@@ -453,13 +544,29 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     } else {
       row.push("", "");
     }
+    if (line === "brakeshoe" && d.isCasting) {
+      const target = lineTargets.find((candidate) => candidate.satuan === "SHOT"
+        && (candidate.shift === header.shift || candidate.shift === "Shift 1 & 2")
+        && (candidate.kategori ?? "") === clean(item.castingCategory));
+      const actual = toFloat(item.qtyShot) ?? 0;
+      const hours = toFloat(header.jamKerja) ?? 0;
+      const operatorCount = Math.max(header.operators.length, 1);
+      const targetForRecord = target
+        ? target.nilai * (d.isTeam ? 1 : operatorCount)
+        : 0;
+      const shiftAchievement = targetForRecord > 0 ? actual / targetForRecord * 100 : "";
+      const hourlyTarget = hours > 0 && targetForRecord > 0 ? targetForRecord / hours : 0;
+      const hourlyActual = hours > 0 ? actual / hours : 0;
+      const hourlyAchievement = hourlyTarget > 0 ? hourlyActual / hourlyTarget * 100 : "";
+      row.push(shiftAchievement, hourlyAchievement);
+    }
     rows.push(row);
     recordIds.push(header.id);
     assistedRows.push((header.assistedOperators ?? []).length > 0);
     seen.add(header.id);
   }
   return {
-    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM"],
+    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(line === "brakeshoe" && d.isCasting ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
     rows, recordIds, assistedRows, total, limited,
   };
 }
@@ -481,6 +588,7 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
   if (!isValidISODate(tanggal)) throw new Error("Tanggal tidak valid.");
   const items = payload.items;
   if (!Array.isArray(items) || !items.length || items.length > 100) throw new Error("Jumlah item tidak valid.");
+  if ((d.castingCategories ?? []).length && items.some((item) => !d.castingCategories.includes(clean(item.castingCategory)))) throw new Error("Pilih kategori Casting yang terdaftar pada master lini.");
   if (d.hasProductionTotal && toInt(payload.jumlahProduksi ?? payload.hasilProduksi) == null) {
     throw new Error("Jumlah produksi (PCS) wajib diisi.");
   }
@@ -501,6 +609,19 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
     .from(karyawan).where(and(eq(karyawan.isActive, 1), ne(karyawan.lini, d.nama))) : [];
   const selectedAssistance = assistedOperatorIds.map((employeeId) => assistanceRows.find((employee) => employee.id === employeeId));
   if (selectedAssistance.some((employee) => !employee)) throw new Error("Karyawan perbantuan tidak aktif atau lini utamanya sudah berubah.");
+  const shift = clean(payload.shift) || "-";
+  const jam = clean(payload.jamKerja || payload.jam);
+  if (!Number.isFinite(Number(jam)) || Number(jam) <= 0 || Number(jam) > 24) {
+    throw new Error("Jam kerja harus berupa angka lebih dari 0 dan maksimal 24 jam.");
+  }
+  const machine = clean(payload.mesin);
+  if (d.hasMesin && !/^(?:[1-9]|10)$/.test(machine)) {
+    throw new Error("Nomor mesin harus berupa angka 1 sampai 10.");
+  }
+  if (d.hasMesin) {
+    await validateMachineAssignment(table, d.nama, tanggal, shift, machine,
+      [...operators, ...selectedAssistance.map((employee) => employee!.nama)], id);
+  }
   await db.transaction(async tx => {
     await tx.insert(auditLog).values({
       entity: "produksi", entityId: id, aksi: "update", actor: "admin",
@@ -508,7 +629,7 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
     });
     await tx.update(table).set({
       lini: d.nama, tanggal,
-      shift: clean(payload.shift) || "-", jamKerja: clean(payload.jamKerja || payload.jam) || "-",
+      shift, jamKerja: jam,
       keterangan: clean(payload.keterangan) || null, proses,
       qtyTotal: d.hasProductionTotal ? toInt(payload.jumlahProduksi ?? payload.hasilProduksi) : null,
       operators, assistedOperators: selectedAssistance.map((employee) => ({ id: employee!.id, nama: employee!.nama, liniAsal: employee!.lini })), items: normalizedItems, requestHash: null, updatedAt: now(),

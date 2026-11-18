@@ -5,9 +5,17 @@ const text = (max = 150) => z.string().trim().max(max);
 const date = z.string().refine(isValidISODate, "Tanggal harus berformat YYYY-MM-DD dan valid.");
 const nonnegative = z.coerce.number().finite().int().min(0).max(1_000_000_000);
 const decimal = z.coerce.number().finite().min(0).max(1_000_000_000);
+const productionHours = z.union([
+  z.string().trim().regex(/^\d+(?:\.\d+)?$/, "Jam kerja harus berupa angka."),
+  z.number().finite(),
+]).transform(Number).refine((value) => value > 0 && value <= 24, "Jam kerja harus lebih dari 0 dan maksimal 24 jam.");
+const machineNumber = z.union([z.string().trim(), z.number().int()])
+  .transform(String)
+  .refine((value) => /^(?:[1-9]|10)$/.test(value), "Nomor mesin harus berupa angka 1 sampai 10.");
 
 const item = z.object({
   type: text().optional(), grade: text().optional(), kulit: text().optional(), merk: text().optional(),
+  castingCategory: text(100).optional(),
   kode: text().optional(), ab: text().optional(), cat: text().optional(), tebal: text().optional(),
   typeHandle: text().optional(), posisiHandle: text().optional(), warna: text().optional(),
   qty: nonnegative.optional(), ng: nonnegative.optional(), ngA: nonnegative.optional(), ngB: nonnegative.optional(),
@@ -17,10 +25,10 @@ export const lineSchema = z.enum(["brakeshoe", "discpad", "handle"]);
 
 export const productionSchema = z.object({
   lini: text().min(1), tanggal: date, shift: text(50).optional(),
-  jam: text(50).optional(), jamKerja: text(50).optional(), keterangan: text(2000).optional(),
+  jam: productionHours, jamKerja: productionHours.optional(), keterangan: text(2000).optional(),
   operator: text().optional(), anggotaTim: z.array(text().min(1)).max(100).optional(),
   assistedOperators: z.array(z.object({ id: z.number().int().positive(), nama: text().min(1) })).max(100).optional(),
-  mesin: text().optional(), proses: text(100).optional(),
+  mesin: machineNumber.optional(), proses: text(100).optional(),
   jumlahProduksi: nonnegative.optional(), hasilProduksi: nonnegative.optional(),
   jumlahShot: z.union([z.null(), nonnegative]).optional(), jumlahSet: z.union([z.null(), decimal]).optional(),
   jumlahPcs: nonnegative.optional(), jumlahKg: decimal.optional(),

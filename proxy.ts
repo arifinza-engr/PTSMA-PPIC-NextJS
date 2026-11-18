@@ -11,7 +11,7 @@ export default auth((request) => {
   if (request.auth && (pathname === "/login" || pathname === "/setup")) return NextResponse.redirect(new URL("/", request.url));
   if (request.auth) {
     const role = request.auth.user.role;
-    const canInput = role === "leader_spv" || role === "superadmin";
+    const canInput = role === "ppic" || role === "leader_spv" || role === "superadmin";
     const canCorrectProduction = role === "ppic" || role === "qc" || role === "superadmin";
     const canManage = role === "superadmin";
     const canManageEmployees = canManage || role === "ppic";

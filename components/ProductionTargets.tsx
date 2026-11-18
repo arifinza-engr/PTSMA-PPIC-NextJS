@@ -5,10 +5,10 @@ import { Modal } from "@/components/ui/modal";
 import type { ProductionProductMaster, ProductCode } from "@/lib/production-master-types";
 
 type Product = ProductCode;
-type Target = { id: number; produk: Product; lini: string; shift: "Shift 1 & 2" | "Shift 3"; basis: "per_orang" | "tim"; satuan: "PCS" | "SET" | "SHOT"; nilai: number };
-type Form = Omit<Target, "id">;
+type Target = { id: number; produk: Product; lini: string; kategori: string; shift: "Shift 1 & 2" | "Shift 3"; basis: "per_orang" | "tim"; satuan: "PCS" | "SET" | "SHOT"; nilai: number };
+type Form = Omit<Target, "id" | "basis">;
 const EMPTY: Form = {
-  produk: "brakeshoe", lini: "", shift: "Shift 1 & 2", basis: "per_orang", satuan: "PCS", nilai: 0,
+  produk: "brakeshoe", lini: "", kategori: "", shift: "Shift 1 & 2", satuan: "PCS", nilai: 0,
 };
 
 async function responseData(response: Response) {
@@ -29,6 +29,7 @@ export default function ProductionTargets() {
   const selectedLine = selectedProduct?.lines.find((line) => line.nama === form.lini);
   const lineOptions = selectedProduct?.lines.filter((line) => line.isActive === 1).map((line) => line.nama) ?? [];
   const metricOptions = selectedLine?.targetMetrics ?? [];
+  const castingCategories = selectedLine?.castingCategories ?? [];
   const productLabels = Object.fromEntries(products.map((product) => [product.kode, product.nama])) as Record<Product, string>;
 
   const load = useCallback(async () => {
@@ -43,7 +44,7 @@ export default function ProductionTargets() {
       if (current.lini) return current;
       const product = productsData.find((item: ProductionProductMaster) => item.kode === current.produk) ?? productsData[0];
       const line = product?.lines.find((item: ProductionProductMaster["lines"][number]) => item.isActive === 1);
-      return product && line ? { ...current, produk: product.kode, lini: line.nama, satuan: line.targetMetrics[0] } : current;
+      return product && line ? { ...current, produk: product.kode, lini: line.nama, kategori: line.castingCategories?.[0] ?? "", satuan: line.targetMetrics[0] } : current;
     });
   }, []);
 
@@ -54,13 +55,13 @@ export default function ProductionTargets() {
     const line = product?.lines.find((item) => item.isActive === 1);
     const lini = line?.nama ?? "";
     const satuan = line?.targetMetrics[0] ?? "PCS";
-    setForm((current) => ({ ...current, produk, lini, satuan }));
+    setForm((current) => ({ ...current, produk, lini, kategori: line?.castingCategories?.[0] ?? "", satuan }));
   }
 
   function setLine(lini: string) {
     const line = products.find((item) => item.kode === form.produk)?.lines.find((item) => item.nama === lini);
     const satuan = line?.targetMetrics[0] ?? "PCS";
-    setForm((current) => ({ ...current, lini, satuan }));
+    setForm((current) => ({ ...current, lini, kategori: line?.castingCategories?.[0] ?? "", satuan }));
   }
 
   function closeEditor() {
@@ -94,7 +95,7 @@ export default function ProductionTargets() {
   }
 
   const targetForm = <form onSubmit={save} className="space-y-4">
-    <p className="text-sm text-muted-foreground">Metrik target mengikuti konfigurasi master lini. Satu nilai berlaku untuk Shift 1 dan Shift 2; Shift 3 memiliki nilai tersendiri.</p>
+    <p className="text-sm text-muted-foreground">Mode Tim/Per orang mengikuti Master Lini. Satu nilai berlaku untuk Shift 1 dan Shift 2; Shift 3 memiliki nilai tersendiri.</p>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <label className="block"><span>Produk</span><select required value={form.produk} onChange={(event) => setProduct(event.target.value as Product)}>
         {Object.entries(productLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -102,11 +103,9 @@ export default function ProductionTargets() {
       <label className="block"><span>Lini</span><select required value={form.lini} onChange={(event) => setLine(event.target.value)}>
         {lineOptions.map((nama) => <option key={nama}>{nama}</option>)}
       </select></label>
+      {castingCategories.length > 0 && <label className="block"><span>Kategori Casting</span><select required value={form.kategori} onChange={(event) => setForm({ ...form, kategori: event.target.value })}><option value="">Pilih kategori</option>{castingCategories.map((category) => <option key={category}>{category}</option>)}</select></label>}
       <label className="block"><span>Shift</span><select value={form.shift} onChange={(event) => setForm({ ...form, shift: event.target.value as Form["shift"] })}>
         {["Shift 1 & 2", "Shift 3"].map((shift) => <option key={shift} value={shift}>{shift === "Shift 1 & 2" ? "Shift 1" : shift}</option>)}
-      </select></label>
-      <label className="block"><span>Target untuk</span><select value={form.basis} onChange={(event) => setForm({ ...form, basis: event.target.value as Form["basis"] })}>
-        <option value="per_orang">Per orang</option><option value="tim">Tim</option>
       </select></label>
       <label className="block"><span>Satuan target</span><select value={form.satuan} onChange={(event) => setForm({ ...form, satuan: event.target.value as Form["satuan"] })}>
         {metricOptions.map((metric) => <option key={metric}>{metric}</option>)}
@@ -122,20 +121,20 @@ export default function ProductionTargets() {
 
   return <section className="master-page">
     <div className="page-heading"><div><p className="eyebrow">Administrasi / Referensi</p><h1>Target Produksi</h1>
-      <p>Atur target tetap per lini, shift, dan basis per orang atau tim.</p></div></div>
+      <p>Atur target tetap per lini dan shift. Mode target mengikuti Master Lini.</p></div></div>
     {error && editingId === null && <p role="alert" className="notice-error mb-3">{error}</p>}
     {message && <p role="status" className="notice-success mb-4">{message}</p>}
     {editingId === null && <div className="mb-6 rounded-xl border border-border bg-card p-5">
-      <div className="form-section-heading"><span>+</span><div><h2>Tambah target</h2><p>Isi produk, lini, shift, basis, satuan, dan nilai target.</p></div></div>
+      <div className="form-section-heading"><span>+</span><div><h2>Tambah target</h2><p>Isi produk, lini, shift, satuan, dan nilai target. Basisnya mengikuti mode lini.</p></div></div>
       {targetForm}
     </div>}
     <Modal open={editingId !== null} title={`Ubah target #${editingId ?? ""}`} description="Perbarui nilai target produksi." onClose={closeEditor}>
       {targetForm}
     </Modal>
     <div className="data-panel"><div className="data-panel-header"><div><p className="eyebrow">Master target</p><h2>{rows.length} target</h2></div></div>
-      <div className="table-frame max-h-[600px] overflow-auto"><table><thead><tr><th>Produk</th><th>Lini</th><th>Shift</th><th>Basis</th><th>Satuan</th><th>Target</th><th>Aksi</th></tr></thead>
-        <tbody>{rows.map((row) => <tr key={row.id}><td>{productLabels[row.produk]}</td><td>{row.lini}</td><td>{row.shift}</td><td>{row.basis === "per_orang" ? "Per orang" : "Tim"}</td><td>{row.satuan}</td><td>{row.nilai}</td>
-          <td><button type="button" className="table-action" onClick={() => { setError(""); setEditingId(row.id); setForm({ produk: row.produk, lini: row.lini, shift: row.shift, basis: row.basis, satuan: row.satuan, nilai: row.nilai }); }}>Ubah</button>
+      <div className="table-frame max-h-[600px] overflow-auto"><table><thead><tr><th>Produk</th><th>Lini</th><th>Kategori</th><th>Shift</th><th>Satuan</th><th>Target</th><th>Aksi</th></tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.id}><td>{productLabels[row.produk]}</td><td>{row.lini}</td><td>{row.kategori || "—"}</td><td>{row.shift}</td><td>{row.satuan}</td><td>{row.nilai}</td>
+          <td><button type="button" className="table-action" onClick={() => { setError(""); setEditingId(row.id); setForm({ produk: row.produk, lini: row.lini, kategori: row.kategori ?? "", shift: row.shift, satuan: row.satuan, nilai: row.nilai }); }}>Ubah</button>
             <button type="button" className="table-action danger" onClick={() => void remove(row)}>Hapus</button></td></tr>)}</tbody></table></div>
       {!rows.length && <p className="empty-inline">Belum ada target produksi.</p>}
     </div>

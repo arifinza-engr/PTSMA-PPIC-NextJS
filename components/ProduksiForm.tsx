@@ -26,8 +26,9 @@ type LiniFlags = {
   hasSet: number;
   hasPcsKg: number;
   targetMetrics: ("PCS" | "SET" | "SHOT")[];
+  castingCategories: string[];
+  detailFields: string[];
   pcsPerSet: number;
-  shotCapacity: number;
 };
 type MasterData = {
   productName?: string;
@@ -102,6 +103,7 @@ const selectStyles: StylesConfig<Choice, false> = {
 const EMPTY: Item = {
   type: "",
   grade: "",
+  castingCategory: "",
   kulit: "",
   merk: "",
   kode: "",
@@ -137,29 +139,33 @@ function columnsFor(
 ): Col[] {
   const po = master?.productOptions;
   if (line === "brakeshoe") {
+    const fields = flags.detailFields ?? ["type", "grade", ...(flags.isCasting ? [] : ["kulit"])];
     if (flags.isCasting) {
-      return [
-        { key: "type", label: "Type", opts: po?.types ?? [] },
-        { key: "grade", label: "Grade", opts: po?.grades ?? [] },
-      ];
+      const cols: Col[] = [];
+      if (fields.includes("type")) cols.push({ key: "type", label: "Type", opts: po?.types ?? [] });
+      if (fields.includes("grade")) cols.push({ key: "grade", label: "Grade", opts: po?.grades ?? [] });
+      if (flags.hasMerk) cols.push({ key: "merk", label: "Merk", text: true });
+      if (flags.hasNg) cols.push({ key: "ng", label: "Total NG", num: true });
+      return cols;
     }
-    const cols: Col[] = [
-      { key: "type", label: "Type", opts: po?.types ?? [] },
-      { key: "grade", label: "Grade", opts: po?.grades ?? [] },
-      { key: "kulit", label: "Kulit", opts: po?.kulits ?? [] },
-    ];
+    const cols: Col[] = [];
+    if (fields.includes("type")) cols.push({ key: "type", label: "Type", opts: po?.types ?? [] });
+    if (fields.includes("grade")) cols.push({ key: "grade", label: "Grade", opts: po?.grades ?? [] });
+    if (fields.includes("kulit")) cols.push({ key: "kulit", label: "Kulit", opts: po?.kulits ?? [] });
     if (flags.hasMerk) cols.push({ key: "merk", label: "Merk", text: true });
     cols.push({ key: "qty", label: "Produksi", num: true });
     if (flags.hasNg) cols.push({ key: "ng", label: "Total NG", num: true });
     return cols;
   }
   if (line === "discpad") {
-    const cols: Col[] = [{ key: "kode", label: "Kode", opts: po?.codes ?? [] }];
+    const fields = flags.detailFields ?? ["kode", "tebal"];
+    const cols: Col[] = [];
+    if (fields.includes("kode")) cols.push({ key: "kode", label: "Kode", opts: po?.codes ?? [] });
     if (flags.hasAb)
       cols.push({ key: "ab", label: "A/B", opts: po?.abOptions ?? [] });
     if (flags.hasCat)
       cols.push({ key: "cat", label: "Cat", opts: po?.coatings ?? [] });
-    cols.push({ key: "tebal", label: "Tebal", opts: po?.tebals ?? [] });
+    if (fields.includes("tebal")) cols.push({ key: "tebal", label: "Tebal", opts: po?.tebals ?? [] });
     cols.push({ key: "qty", label: "Qty (PCS)", num: true });
     if (flags.hasNgB) {
       cols.push({ key: "ngA", label: "NG A", num: true });
@@ -170,16 +176,19 @@ function columnsFor(
     return cols;
   }
   // handle
-  const base: Col[] = [
-    { key: "typeHandle", label: "Type Handle", opts: po?.typeHandles ?? [] },
-    { key: "posisiHandle", label: "Posisi Handle", opts: po?.posisiHandles ?? [] },
-    { key: "warna", label: "Warna", opts: po?.warnas ?? [] },
-  ];
-  if (flags.isCasting) return base;
+  const fields = flags.detailFields ?? ["typeHandle", "posisiHandle", "warna"];
+  const base: Col[] = [];
+  if (fields.includes("typeHandle")) base.push({ key: "typeHandle", label: "Type Handle", opts: po?.typeHandles ?? [] });
+  if (fields.includes("posisiHandle")) base.push({ key: "posisiHandle", label: "Posisi Handle", opts: po?.posisiHandles ?? [] });
+  if (fields.includes("warna")) base.push({ key: "warna", label: "Warna", opts: po?.warnas ?? [] });
+  if (flags.isCasting) {
+    if (flags.hasNg) base.push({ key: "ng", label: "Total NG", num: true });
+    return base;
+  }
   return [
     ...base,
     { key: "qty", label: "Produksi", num: true },
-    { key: "ng", label: "Total NG", num: true },
+    ...(flags.hasNg ? [{ key: "ng", label: "Total NG", num: true }] : []),
   ];
 }
 
@@ -294,6 +303,7 @@ export default function ProduksiForm({
           record.items.map((item: Record<string, string | number | null>) => ({
             type: String(item.type ?? ""),
             grade: String(item.grade ?? ""),
+            castingCategory: String(item.castingCategory ?? ""),
             kulit: String(item.kulit ?? ""),
             merk: String(item.merk ?? ""),
             kode: String(item.kode ?? ""),
@@ -336,6 +346,13 @@ export default function ProduksiForm({
     setMsg(null);
     if (!lini) return setMsg({ t: "error", v: "Lini wajib dipilih." });
     if (!tanggal) return setMsg({ t: "error", v: "Tanggal wajib diisi." });
+    const jamKerjaValue = Number(jam);
+    if (!jam.trim() || !Number.isFinite(jamKerjaValue) || jamKerjaValue <= 0 || jamKerjaValue > 24) {
+      return setMsg({ t: "error", v: "Jam kerja harus berupa angka lebih dari 0 dan maksimal 24 jam." });
+    }
+    if (flags.hasMesin === 1 && !/^(?:[1-9]|10)$/.test(mesin.trim())) {
+      return setMsg({ t: "error", v: "Nomor mesin harus berupa angka 1 sampai 10." });
+    }
 
     let operatorVal = "";
     let anggotaTim: string[] = [];
@@ -355,12 +372,13 @@ export default function ProduksiForm({
         .map((i) => ({
           type: i.type,
           grade: i.grade,
+          castingCategory: i.castingCategory,
           kulit: i.kulit,
           merk: i.merk,
           qty: num(i.qty),
           ng: num(i.ng),
         }))
-        .filter((i) => i.type || i.grade || i.kulit || i.merk || i.qty || i.ng);
+        .filter((i) => i.type || i.grade || i.castingCategory || i.kulit || i.merk || i.qty || i.ng);
     } else if (line === "discpad") {
       payloadItems = items
         .map((i) => ({
@@ -378,12 +396,13 @@ export default function ProduksiForm({
       payloadItems = (isCasting ? [items[0]] : items)
         .map((i) => ({
           typeHandle: i.typeHandle,
+          castingCategory: i.castingCategory,
           posisiHandle: i.posisiHandle,
           warna: i.warna,
           qty: num(i.qty),
           ng: num(i.ng),
         }))
-        .filter((i) => i.typeHandle || i.posisiHandle || i.warna || i.qty || i.ng);
+        .filter((i) => i.typeHandle || i.castingCategory || i.posisiHandle || i.warna || i.qty || i.ng);
     }
     if (!payloadItems.length)
       return setMsg({ t: "error", v: "Detail produksi minimal 1 item." });
@@ -566,9 +585,13 @@ export default function ProduksiForm({
             <span className="text-sm font-medium">Jam Kerja</span>
             <input
               type="number"
+              min="0.1"
+              max="24"
+              step="0.1"
+              required
               value={jam}
               onChange={(e) => setJam(e.target.value)}
-              placeholder="Masukkan jumlah jam"
+              placeholder="Contoh: 8"
               className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
             />
           </label>
@@ -692,11 +715,18 @@ export default function ProduksiForm({
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {!!flags.castingCategories?.length && <label className="block"><span className="text-sm font-medium">Kategori Casting</span><select required value={items[0]?.castingCategory ?? ""} onChange={(event) => setItem(0, "castingCategory", event.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"><option value="">Pilih kategori</option>{flags.castingCategories.map((category) => <option key={category}>{category}</option>)}</select></label>}
               {flags.hasMesin === 1 && <label className="block">
                 <span className="text-sm font-medium">Mesin</span>
                 <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  required
                   value={mesin}
                   onChange={(e) => setMesin(e.target.value)}
+                  placeholder="Nomor 1–10"
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
               </label>}

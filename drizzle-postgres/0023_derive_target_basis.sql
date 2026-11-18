@@ -1,0 +1,1 @@
+ALTER TABLE "production_target" DROP COLUMN "basis";

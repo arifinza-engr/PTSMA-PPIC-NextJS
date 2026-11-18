@@ -36,7 +36,7 @@ export async function POST(
 ) {
   const denied = requireSameOrigin(req);
   if (denied) return denied;
-  const forbidden = await requireRole(["leader_spv"]); if (forbidden) return forbidden;
+  const forbidden = await requireRole(["leader_spv", "ppic"]); if (forbidden) return forbidden;
   const { line } = await params;
   try {
     const body = parseProduction(await req.json());

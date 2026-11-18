@@ -42,7 +42,7 @@ export default function Nav() {
   }, [session?.user]);
   if (pathname === "/login") return null;
   const role: unknown = session?.user.role;
-  const canInput = role === "leader_spv" || role === "superadmin";
+  const canInput = role === "ppic" || role === "leader_spv" || role === "superadmin";
   const canManage = role === "superadmin";
   const canManageEmployees = canManage || role === "ppic";
   const canManageTargets = canManage || role === "ppic";

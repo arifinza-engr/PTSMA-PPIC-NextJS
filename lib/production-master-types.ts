@@ -1,5 +1,6 @@
 export const PRODUCT_CODES = ["brakeshoe", "discpad", "handle"] as const;
 export type ProductCode = (typeof PRODUCT_CODES)[number];
+export type ProductionDetailField = "type" | "grade" | "kulit" | "kode" | "tebal" | "typeHandle" | "posisiHandle" | "warna";
 
 export type ProductionLineConfig = {
   nama: string;
@@ -19,8 +20,9 @@ export type ProductionLineConfig = {
   hasSet: number;
   hasPcsKg: number;
   targetMetrics: ("PCS" | "SET" | "SHOT")[];
+  castingCategories: string[];
+  detailFields: ProductionDetailField[];
   pcsPerSet: number;
-  shotCapacity: number;
   isActive: number;
   sortOrder: number;
 };

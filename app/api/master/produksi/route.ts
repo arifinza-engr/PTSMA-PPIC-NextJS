@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireRole, requireSameOrigin } from "@/lib/authorize";
-import { getProductionMaster, saveProductionProductMaster } from "@/lib/production-master";
+import { deleteProductionLine, getProductionMaster, saveProductionProductMaster } from "@/lib/production-master";
 import { PRODUCT_CODES } from "@/lib/production-master-types";
 
 export const runtime = "nodejs";
@@ -28,5 +28,17 @@ export async function PUT(req: NextRequest) {
     const body = await req.json() as { kode?: unknown; value?: unknown };
     if (typeof body.kode !== "string" || !(PRODUCT_CODES as readonly string[]).includes(body.kode)) throw new Error("Kode produk tidak dikenal.");
     return Response.json(await saveProductionProductMaster(body.kode, body.value));
+  } catch (error) { return errorResponse(error); }
+}
+
+export async function DELETE(req: NextRequest) {
+  const denied = requireSameOrigin(req);
+  if (denied) return denied;
+  const forbidden = await requireRole(["superadmin"]);
+  if (forbidden) return forbidden;
+  try {
+    const body = await req.json() as { kode?: unknown; lini?: unknown };
+    if (typeof body.kode !== "string" || typeof body.lini !== "string") throw new Error("Produk dan nama lini wajib diisi.");
+    return Response.json(await deleteProductionLine(body.kode, body.lini));
   } catch (error) { return errorResponse(error); }
 }

@@ -39,11 +39,11 @@ export const productionTarget = pgTable("production_target", {
 	produk: text().notNull(),
 	lini: text().notNull(),
 	shift: text().notNull(),
-	basis: text().notNull(),
+	kategori: text().default("").notNull(),
 	satuan: text().notNull(),
 	nilai: doublePrecision().notNull(),
 }, (table) => [
-	uniqueIndex("idx_production_target_unique").on(table.produk, table.lini, table.shift, table.satuan),
+	uniqueIndex("idx_production_target_unique").on(table.produk, table.lini, table.shift, table.satuan, table.kategori),
 	index("idx_production_target_line_shift").on(table.produk, table.lini, table.shift),
 ]);
 

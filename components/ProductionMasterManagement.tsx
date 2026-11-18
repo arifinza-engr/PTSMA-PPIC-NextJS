@@ -64,6 +64,7 @@ export default function ProductionMasterManagement() {
       if (key === "isCasting" && selectedCode !== "discpad") {
         next.detailFields = defaultDetailFields(selectedCode || "brakeshoe", checked);
         if (checked) {
+          next.castingCategories = ["Besar", "Kecil", "Handle"];
           next.hasShot = 1; next.hasSet = 1; next.hasPcsKg = 1;
           if (!next.targetMetrics.includes("SHOT")) next.targetMetrics = [...next.targetMetrics, "SHOT"];
         } else {

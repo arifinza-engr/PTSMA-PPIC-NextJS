@@ -169,6 +169,13 @@
       "when": 1794986222008,
       "tag": "0023_derive_target_basis",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794993740552,
+      "tag": "0024_add_handle_casting_category",
+      "breakpoints": true
     }
   ]
 }

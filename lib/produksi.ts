@@ -97,8 +97,8 @@ export async function getMaster(line: string, liniName?: string, includeInactive
   if (!product) throw new Error("Jenis produk tidak aktif atau tidak dikenal: " + line);
   const configuredLines = product.lines.filter((row) => includeInactive || row.isActive === 1);
   const liniOptions = configuredLines.map((row) => row.nama);
-  const linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields }) =>
-    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, targetMetrics, castingCategories, detailFields: detailFields ?? defaultDetailFields(line as Line, isCasting === 1) }));
+  const linis = configuredLines.map(({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, pcsPerSet, targetMetrics, castingCategories, detailFields }) =>
+    ({ nama, isCasting, isTeam, hasNg, hasMerk, hasCat, hasMesin, hasNgB, hasAb, hasProductionTotal, requiresPositiveTotal, hasProcess, hasShot, hasSet, hasPcsKg, pcsPerSet, targetMetrics, castingCategories, detailFields: detailFields ?? defaultDetailFields(line as Line, isCasting === 1) }));
   const operatorOptions = liniName ? await getOperators(line, liniName) : [];
   const productOptions = buildProductOptions(line, product.options);
   const refreshDelayMs = line === "discpad" ? 3000 : 15000;
@@ -189,9 +189,9 @@ function buildItem(
         ng: d.hasNg ? toInt(it.ng) : null,
         mesin: d.hasMesin ? clean(payload.mesin) || null : null,
         qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
-        qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
+        qtySet: d.hasSet ? toFloat(payload.jumlahSet) : null,
         qtyPcs: d.hasPcsKg ? toInt(payload.jumlahPcs) : null,
-        qtyKg: d.hasPcsKg ? toFloat(payload.jumlahKg) : null,
+        qtyKg: null,
       };
     }
     return {
@@ -222,15 +222,16 @@ function buildItem(
   if (d.isCasting) {
     return {
       typeHandle: d.detailFields?.includes("typeHandle") ? clean(it.typeHandle) || "-" : null,
+      castingCategory: clean(it.castingCategory) || null,
       grade: "-",
       ng: d.hasNg ? toInt(it.ng) : null,
       posisiHandle: d.detailFields?.includes("posisiHandle") ? clean(it.posisiHandle) || null : null,
       warna: d.detailFields?.includes("warna") ? clean(it.warna) || null : null,
       mesin: d.hasMesin ? clean(payload.mesin) || null : null,
       qtyShot: d.hasShot ? toInt(payload.jumlahShot) : null,
-      qtySet: d.hasSet ? toInt(payload.jumlahSet) : null,
+      qtySet: d.hasSet ? toFloat(payload.jumlahSet) : null,
       qtyPcs: d.hasPcsKg ? toInt(payload.jumlahPcs) : null,
-      qtyKg: d.hasPcsKg ? toFloat(payload.jumlahKg) : null,
+      qtyKg: null,
     };
   }
   return {
@@ -286,8 +287,8 @@ export async function submitProduksi(line: Line, input: unknown): Promise<string
 
   const table = productionTable(line);
   const machine = clean(payload.mesin);
-  if (d.hasMesin && !/^(?:[1-9]|10)$/.test(machine)) {
-    throw new Error("Nomor mesin harus berupa angka 1 sampai 10.");
+  if (d.hasMesin && !/^(?:[1-9]|1[0-2])$/.test(machine)) {
+    throw new Error("Nomor mesin harus berupa angka 1 sampai 12.");
   }
   if (d.hasMesin) {
     await validateMachineAssignment(table, d.nama, tanggal, shift, machine,
@@ -354,7 +355,7 @@ function layoutFor(line: Line, d: LineConfig) {
         ...(d.hasMerk ? ["MERK"] : []),
         ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "SHIFT", "MESIN",
         "JAM KERJA", "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET",
-        "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG",
+        "JUMLAH PRODUKSI PCS",
         ...(d.hasNg ? ["TOTAL NG"] : []), "KETERANGAN",
       ];
       return {
@@ -366,7 +367,7 @@ function layoutFor(line: Line, d: LineConfig) {
           if (fields.includes("grade")) row.push(it.grade);
           if (d.hasMerk) row.push(it.merk);
           if ((d.castingCategories ?? []).length) row.push(it.castingCategory);
-          row.push(g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg);
+          row.push(g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs);
           if (d.hasNg) row.push(it.ng);
           row.push(g.ket);
           return row;
@@ -443,7 +444,7 @@ function layoutFor(line: Line, d: LineConfig) {
   const isCasting = !!d.isCasting;
   const fields = d.detailFields ?? [];
   const headers = ["LINI", "OPERATOR", "TANGGAL", "SHIFT", "JAM KERJA"];
-  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "MESIN", ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET", "JUMLAH PRODUKSI PCS", "JUMLAH PRODUKSI KG", ...(d.hasNg ? ["TOTAL NG"] : []));
+  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "MESIN", ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET", "JUMLAH PRODUKSI PCS", ...(d.hasNg ? ["TOTAL NG"] : []));
   else {
     if (fields.includes("typeHandle")) headers.push("TYPE HANDLE");
     if (fields.includes("posisiHandle")) headers.push("POSISI HANDLE");
@@ -463,7 +464,7 @@ function layoutFor(line: Line, d: LineConfig) {
         if (fields.includes("typeHandle")) row.push(it.typeHandle);
         if (fields.includes("posisiHandle")) row.push(it.posisiHandle);
         if (fields.includes("warna")) row.push(it.warna);
-        row.push(it.qtyShot, it.qtySet, it.qtyPcs, it.qtyKg);
+        row.push(it.qtyShot, it.qtySet, it.qtyPcs);
         if (d.hasNg) row.push(it.ng);
       } else {
         if (fields.includes("typeHandle")) row.push(it.typeHandle);
@@ -544,7 +545,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     } else {
       row.push("", "");
     }
-    if (line === "brakeshoe" && d.isCasting) {
+    if (d.isCasting) {
       const target = lineTargets.find((candidate) => candidate.satuan === "SHOT"
         && (candidate.shift === header.shift || candidate.shift === "Shift 1 & 2")
         && (candidate.kategori ?? "") === clean(item.castingCategory));
@@ -566,7 +567,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     seen.add(header.id);
   }
   return {
-    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(line === "brakeshoe" && d.isCasting ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
+    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(d.isCasting ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
     rows, recordIds, assistedRows, total, limited,
   };
 }
@@ -615,8 +616,8 @@ export async function updateProductionRecord(id: number, line: Line, input: unkn
     throw new Error("Jam kerja harus berupa angka lebih dari 0 dan maksimal 24 jam.");
   }
   const machine = clean(payload.mesin);
-  if (d.hasMesin && !/^(?:[1-9]|10)$/.test(machine)) {
-    throw new Error("Nomor mesin harus berupa angka 1 sampai 10.");
+  if (d.hasMesin && !/^(?:[1-9]|1[0-2])$/.test(machine)) {
+    throw new Error("Nomor mesin harus berupa angka 1 sampai 12.");
   }
   if (d.hasMesin) {
     await validateMachineAssignment(table, d.nama, tanggal, shift, machine,

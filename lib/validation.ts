@@ -11,7 +11,7 @@ const productionHours = z.union([
 ]).transform(Number).refine((value) => value > 0 && value <= 24, "Jam kerja harus lebih dari 0 dan maksimal 24 jam.");
 const machineNumber = z.union([z.string().trim(), z.number().int()])
   .transform(String)
-  .refine((value) => /^(?:[1-9]|10)$/.test(value), "Nomor mesin harus berupa angka 1 sampai 10.");
+  .refine((value) => /^(?:[1-9]|1[0-2])$/.test(value), "Nomor mesin harus berupa angka 1 sampai 12.");
 
 const item = z.object({
   type: text().optional(), grade: text().optional(), kulit: text().optional(), merk: text().optional(),

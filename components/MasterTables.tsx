@@ -15,6 +15,7 @@ export default function MasterTables() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [liniOptions, setLiniOptions] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [addingEmployee, setAddingEmployee] = useState(false);
   const [form, setForm] = useState<EmployeeForm>(EMPTY);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -47,7 +48,7 @@ export default function MasterTables() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan karyawan.");
       setMessage(`Data karyawan berhasil disimpan (#${data.id}).`);
-      setEditingId(null); setForm(EMPTY); await load();
+      setEditingId(null); setAddingEmployee(false); setForm(EMPTY); await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Gagal menyimpan karyawan."); }
     finally { setSaving(false); }
   }
@@ -68,7 +69,7 @@ export default function MasterTables() {
   }
 
   function closeEditor() {
-    setEditingId(null); setForm(EMPTY); setError("");
+    setEditingId(null); setAddingEmployee(false); setForm(EMPTY); setError("");
   }
 
   const employeeForm = <form onSubmit={save}>
@@ -84,7 +85,7 @@ export default function MasterTables() {
     </div>
     {error && <p role="alert" className="notice-error mt-3">{error}</p>}
     <div className="mt-5 flex justify-end gap-2">
-      {editingId !== null && <button type="button" className="action-secondary" onClick={closeEditor}>Batal</button>}
+      {(editingId !== null || addingEmployee) && <button type="button" className="action-secondary" onClick={closeEditor}>Batal</button>}
       <button type="submit" disabled={saving}>{saving ? "Menyimpan…" : "Simpan"}</button>
     </div>
   </form>;
@@ -92,20 +93,17 @@ export default function MasterTables() {
   return <section className="master-page">
     <div className="page-heading"><div><p className="eyebrow">Administrasi / Referensi</p><h1>Master Karyawan</h1>
       <p>Kelola data karyawan, lini kerja, dan jabatan.</p></div></div>
-    {error && editingId === null && <p role="alert" className="notice-error mb-3">{error}</p>}
+    {error && editingId === null && !addingEmployee && <p role="alert" className="notice-error mb-3">{error}</p>}
     {message && <p role="status" className="notice-success mb-4">{message}</p>}
-    {canManageEmployees && editingId === null && <div className="mb-6 rounded-xl border border-border bg-card p-5">
-      <div className="form-section-heading"><span>+</span><div><h2>Tambah karyawan</h2><p>Isi nama, lini, jabatan, dan status karyawan.</p></div></div>
-      {employeeForm}
-    </div>}
-    <Modal open={canManageEmployees && editingId !== null} title={`Ubah karyawan #${editingId ?? ""}`} description="Perbarui data karyawan." onClose={closeEditor}>
+    {canManageEmployees && editingId === null && !addingEmployee && <button type="button" className="action-secondary mb-4" onClick={() => { setError(""); setMessage(""); setForm(EMPTY); setAddingEmployee(true); }}>Tambah karyawan</button>}
+    <Modal open={canManageEmployees && (addingEmployee || editingId !== null)} title={editingId === null ? "Tambah karyawan" : `Ubah karyawan #${editingId}`} description={editingId === null ? "Isi nama, lini, jabatan, dan status karyawan." : "Perbarui data karyawan."} onClose={closeEditor}>
       {employeeForm}
     </Modal>
     <div className="data-panel"><div className="data-panel-header"><div><p className="eyebrow">Daftar karyawan</p><h2>{rows.length} data</h2></div>
       <label className="search-field">Cari<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari karyawan" /></label></div>
       <div className="table-frame max-h-[600px] overflow-auto"><table><thead><tr><th>ID</th><th>Nama</th><th>Lini</th><th>Jabatan</th><th>Aktif</th><th>Aksi</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}><td>{row.id}</td><td>{row.nama}</td><td>{row.lini ?? "—"}</td><td>{row.jabatan}</td><td>{row.isActive ? "Ya" : "Tidak"}</td>
-          <td>{canManageEmployees && <button type="button" className="table-action" onClick={() => { setError(""); setEditingId(row.id); setForm({ nama: row.nama, lini: row.lini ?? "", jabatan: row.jabatan, isActive: Boolean(row.isActive) }); }}>Ubah</button>}
+          <td>{canManageEmployees && <button type="button" className="table-action" onClick={() => { setError(""); setAddingEmployee(false); setEditingId(row.id); setForm({ nama: row.nama, lini: row.lini ?? "", jabatan: row.jabatan, isActive: Boolean(row.isActive) }); }}>Ubah</button>}
             {canDeleteEmployees && <button type="button" className="table-action danger" onClick={() => void remove(row)}>Hapus</button>}</td>
         </tr>)}</tbody></table></div>
       {employees.length === 0 && !error && <p className="empty-inline">Belum ada data karyawan.</p>}

@@ -54,7 +54,7 @@ export default function ProductionMasterManagement() {
     ["hasProcess", "Pilihan proses"], ["hasShot", "Jumlah shot"], ["hasSet", "Jumlah set"],
   );
   if (lineDraft?.isCasting === 1 && selectedCode !== "discpad") lineFlagOptions.push(
-    ["hasMesin", "Kolom mesin"], ["hasShot", "Jumlah shot"], ["hasSet", "Jumlah set"], ["hasPcsKg", "Jumlah PCS dan KG"],
+    ["hasMesin", "Kolom mesin"], ["hasShot", "Jumlah shot"], ["hasSet", "Jumlah set"], ["hasPcsKg", "Jumlah PCS"],
   );
 
   function updateLineFlag(key: LineFlagKey, checked: boolean) {

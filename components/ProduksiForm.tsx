@@ -212,7 +212,6 @@ export default function ProduksiForm({
   const [shot, setShot] = useState("");
   const [setv, setSetv] = useState("");
   const [pcs, setPcs] = useState("");
-  const [kg, setKg] = useState("");
   const [proses, setProses] = useState("");
   const [jumlahProduksi, setJumlahProduksi] = useState("");
   const [keterangan, setKeterangan] = useState("");
@@ -246,6 +245,7 @@ export default function ProduksiForm({
   );
   const isCasting = !!flags.isCasting;
   const isTeam = !!flags.isTeam;
+  const pcsPerSet = flags.pcsPerSet ?? 0;
   const processOptions = master?.paintingProcessOptions ?? master?.productOptions.processes ?? [];
   useEffect(() => {
     if (flags.hasProcess && processOptions.length && !processOptions.includes(proses)) setProses(processOptions[0]);
@@ -298,7 +298,6 @@ export default function ProduksiForm({
         setShot(String(first.qtyShot ?? ""));
         setSetv(String(first.qtySet ?? ""));
         setPcs(String(first.qtyPcs ?? ""));
-        setKg(String(first.qtyKg ?? ""));
         setItems(
           record.items.map((item: Record<string, string | number | null>) => ({
             type: String(item.type ?? ""),
@@ -350,8 +349,8 @@ export default function ProduksiForm({
     if (!jam.trim() || !Number.isFinite(jamKerjaValue) || jamKerjaValue <= 0 || jamKerjaValue > 24) {
       return setMsg({ t: "error", v: "Jam kerja harus berupa angka lebih dari 0 dan maksimal 24 jam." });
     }
-    if (flags.hasMesin === 1 && !/^(?:[1-9]|10)$/.test(mesin.trim())) {
-      return setMsg({ t: "error", v: "Nomor mesin harus berupa angka 1 sampai 10." });
+    if (flags.hasMesin === 1 && !/^(?:[1-9]|1[0-2])$/.test(mesin.trim())) {
+      return setMsg({ t: "error", v: "Nomor mesin harus berupa angka 1 sampai 12." });
     }
 
     let operatorVal = "";
@@ -430,7 +429,6 @@ export default function ProduksiForm({
       if (flags.hasSet) payload.jumlahSet = num(setv);
       if (flags.hasPcsKg) {
         payload.jumlahPcs = num(pcs);
-        payload.jumlahKg = num(kg);
       }
     }
     if (line === "discpad") {
@@ -472,7 +470,6 @@ export default function ProduksiForm({
         setShot("");
         setSetv("");
         setPcs("");
-        setKg("");
         setJumlahProduksi("");
         setKeterangan("");
         setOperator("");
@@ -544,6 +541,7 @@ export default function ProduksiForm({
               <Select
                 options={toOptions(opts)}
                 value={operator ? { value: operator, label: operator } : null}
+                isDisabled={assistedOperators.length > 0}
                 onChange={(opt) => setOperator(opt?.value || "")}
                 placeholder="-- Pilih Operator --"
                 isSearchable
@@ -650,7 +648,7 @@ export default function ProduksiForm({
           )}
         </div>
 
-        {lini && (
+        {lini && (isTeam || !operator) && (
           <fieldset className="border border-amber-300 rounded-lg p-3 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20">
             <legend className="px-2 text-sm font-medium">Perbantuan dari lini lain</legend>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-2">
@@ -721,12 +719,12 @@ export default function ProduksiForm({
                 <input
                   type="number"
                   min="1"
-                  max="10"
+                  max="12"
                   step="1"
                   required
                   value={mesin}
                   onChange={(e) => setMesin(e.target.value)}
-                  placeholder="Nomor 1–10"
+                  placeholder="Nomor 1–12"
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
               </label>}
@@ -744,7 +742,13 @@ export default function ProduksiForm({
                 <input
                   type="number"
                   value={setv}
-                  onChange={(e) => setSetv(e.target.value)}
+                  step="any"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSetv(value);
+                    if (value === "") setPcs("");
+                    else if (pcsPerSet > 0) setPcs(String(Number(value) * pcsPerSet));
+                  }}
                   className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                 />
               </label>}
@@ -755,16 +759,13 @@ export default function ProduksiForm({
                     <input
                       type="number"
                       value={pcs}
-                      onChange={(e) => setPcs(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-medium">Jumlah Kg</span>
-                    <input
-                      type="number"
-                      value={kg}
-                      onChange={(e) => setKg(e.target.value)}
+                      step="any"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPcs(value);
+                        if (value === "") setSetv("");
+                        else if (pcsPerSet > 0) setSetv(String(Number(value) / pcsPerSet));
+                      }}
                       className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
                     />
                   </label>

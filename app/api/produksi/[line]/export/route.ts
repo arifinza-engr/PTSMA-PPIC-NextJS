@@ -68,8 +68,17 @@ export async function GET(
 
     // Add data rows
     result.rows.forEach((row, rowIdx) => {
-      const dataRow = worksheet.addRow(row);
-      dataRow.eachCell((cell, colNum) => {
+      const exportRow = row.map((value, index) => {
+        const header = result.headers[index]?.toUpperCase() || "";
+        if (typeof value !== "number") return value;
+        if (header.includes("PENCAPAIAN TARGET")) return `${value.toFixed(2)}%`;
+        if (header.includes("PERSENTASE") || header.includes("PCT")) {
+          return `${(value <= 1 ? value * 100 : value).toFixed(2)}%`;
+        }
+        return value;
+      });
+      const dataRow = worksheet.addRow(exportRow);
+      dataRow.eachCell((cell) => {
         // Alternate row colors
         if (rowIdx % 2 === 0) {
           cell.fill = {
@@ -82,18 +91,6 @@ export async function GET(
         // Format numbers with thousand separator
         if (typeof cell.value === "number" && cell.value >= 100) {
           cell.numFmt = "#,##0";
-        }
-
-        // Format percentages
-        const header = result.headers[colNum - 1]?.toUpperCase() || "";
-        if (header.includes("PERSENTASI") || header.includes("PCT")) {
-          if (typeof cell.value === "number") {
-            if (cell.value <= 1) {
-              cell.numFmt = "0.00%";
-            } else {
-              cell.numFmt = "0.00%";
-            }
-          }
         }
 
         cell.border = {
@@ -111,15 +108,15 @@ export async function GET(
     footerRow.getCell(1).font = { italic: true, size: 10 };
 
     // Auto-fit columns (approximate)
+    const headerRowNumber = from || to ? 3 : 2;
     worksheet.columns.forEach((column) => {
       let maxLength = 0;
-      column.eachCell?.({ includeEmpty: true }, (cell) => {
-        const cellLength = cell.value?.toString().length || 0;
-        if (cellLength > maxLength) {
-          maxLength = Math.min(cellLength, 50); // Cap at 50 chars
+      column.eachCell?.({ includeEmpty: false }, (cell, rowNumber) => {
+        if (rowNumber >= headerRowNumber) {
+          maxLength = Math.max(maxLength, String(cell.value ?? "").length);
         }
       });
-      column.width = maxLength + 2;
+      column.width = Math.min(Math.max(maxLength + 2, 8), 40);
     });
 
     // Generate buffer

@@ -536,7 +536,6 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
       const targetText = targets.length
         ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")} (${d.isTeam ? "tim" : "per orang"})`).join("; ")
         : "Master blm diisi";
-      const hours = toFloat(header.jamKerja);
       const hourlyTargetText = targets.length
         ? targets.map((target) => `${target.satuan} ${targetPerHour(target.nilai).toLocaleString("id-ID", { maximumFractionDigits: 2 })}/jam`).join("; ")
         : "Master blm diisi";

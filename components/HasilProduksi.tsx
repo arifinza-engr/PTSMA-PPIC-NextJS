@@ -578,7 +578,7 @@ export default function HasilProduksi({
                 <TableHeader>
                   <TableRow>
                     {table.getHeaderGroups().map((headerGroup) => headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
+                      <TableHead key={header.id} className="sticky top-0 z-20 bg-muted">
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <Button
                             type="button"

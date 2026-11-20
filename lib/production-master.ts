@@ -62,9 +62,6 @@ export function normalizeProductMaster(input: unknown, code: ProductCode): Produ
     }
     if (parsedFlags.hasMerk && code !== "brakeshoe") throw new Error(`Kolom merk belum didukung untuk ${lineName}.`);
     if (parsedFlags.hasPcsKg && !parsedFlags.isCasting) throw new Error(`Kolom PCS hanya tersedia untuk lini casting (${lineName}).`);
-    if (parsedFlags.isCasting && code !== "discpad" && (!parsedFlags.hasShot || !parsedFlags.hasSet || !parsedFlags.hasPcsKg)) {
-      throw new Error(`Lini casting ${lineName} harus mengaktifkan Shot, Set, dan PCS.`);
-    }
     if (parsedFlags.hasMesin && !parsedFlags.isCasting) throw new Error(`Kolom mesin hanya tersedia untuk lini casting (${lineName}).`);
     if (parsedFlags.requiresPositiveTotal && !parsedFlags.hasProductionTotal) throw new Error(`Total wajib lebih dari nol harus mengaktifkan total produksi (${lineName}).`);
     if ((parsedFlags.hasShot || parsedFlags.hasSet) && !parsedFlags.isCasting && code !== "discpad") {

@@ -709,7 +709,7 @@ export default function ProduksiForm({
               <span>02</span>
               <div>
                 <h2>Parameter casting</h2>
-                <p>Isi mesin dan keluaran proses untuk laporan ini.</p>
+                <p>Isi kolom casting yang diaktifkan di master lini.</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

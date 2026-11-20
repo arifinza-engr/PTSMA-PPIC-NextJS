@@ -354,9 +354,10 @@ function layoutFor(line: Line, d: LineConfig) {
         "TANGGAL", "LINI", "OPERATOR",
         ...(fields.includes("type") ? ["TYPE"] : []), ...(fields.includes("grade") ? ["GRADE"] : []),
         ...(d.hasMerk ? ["MERK"] : []),
-        ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "SHIFT", "MESIN",
-        "JAM KERJA", "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET",
-        "JUMLAH PRODUKSI PCS",
+        ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "SHIFT", ...(d.hasMesin ? ["MESIN"] : []),
+        "JAM KERJA", ...(d.hasShot ? ["JUMLAH PRODUKSI SHOT"] : []),
+        ...(d.hasSet ? ["JUMLAH PRODUKSI SET"] : []),
+        ...(d.hasPcsKg ? ["JUMLAH PRODUKSI PCS"] : []),
         ...(d.hasNg ? ["TOTAL NG"] : []), "KETERANGAN",
       ];
       return {
@@ -368,7 +369,12 @@ function layoutFor(line: Line, d: LineConfig) {
           if (fields.includes("grade")) row.push(it.grade);
           if (d.hasMerk) row.push(it.merk);
           if ((d.castingCategories ?? []).length) row.push(it.castingCategory);
-          row.push(g.shift, it.mesin, g.jam, it.qtyShot, it.qtySet, it.qtyPcs);
+          row.push(g.shift);
+          if (d.hasMesin) row.push(it.mesin);
+          row.push(g.jam);
+          if (d.hasShot) row.push(it.qtyShot);
+          if (d.hasSet) row.push(it.qtySet);
+          if (d.hasPcsKg) row.push(it.qtyPcs);
           if (d.hasNg) row.push(it.ng);
           row.push(g.ket);
           return row;
@@ -445,7 +451,7 @@ function layoutFor(line: Line, d: LineConfig) {
   const isCasting = !!d.isCasting;
   const fields = d.detailFields ?? [];
   const headers = ["LINI", "OPERATOR", "TANGGAL", "SHIFT", "JAM KERJA"];
-  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "MESIN", ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), "JUMLAH PRODUKSI SHOT", "JUMLAH PRODUKSI SET", "JUMLAH PRODUKSI PCS", ...(d.hasNg ? ["TOTAL NG"] : []));
+  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), ...(d.hasMesin ? ["MESIN"] : []), ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), ...(d.hasShot ? ["JUMLAH PRODUKSI SHOT"] : []), ...(d.hasSet ? ["JUMLAH PRODUKSI SET"] : []), ...(d.hasPcsKg ? ["JUMLAH PRODUKSI PCS"] : []), ...(d.hasNg ? ["TOTAL NG"] : []));
   else {
     if (fields.includes("typeHandle")) headers.push("TYPE HANDLE");
     if (fields.includes("posisiHandle")) headers.push("POSISI HANDLE");
@@ -461,11 +467,14 @@ function layoutFor(line: Line, d: LineConfig) {
       const g = grp(p, isFirst, ops);
         const row: ReportCell[] = [g.lini, g.operator, g.tanggal, g.shift, g.jam];
       if (isCasting) {
-        row.push(...((d.castingCategories ?? []).length ? [it.castingCategory] : []), it.mesin);
+        row.push(...((d.castingCategories ?? []).length ? [it.castingCategory] : []));
+        if (d.hasMesin) row.push(it.mesin);
         if (fields.includes("typeHandle")) row.push(it.typeHandle);
         if (fields.includes("posisiHandle")) row.push(it.posisiHandle);
         if (fields.includes("warna")) row.push(it.warna);
-        row.push(it.qtyShot, it.qtySet, it.qtyPcs);
+        if (d.hasShot) row.push(it.qtyShot);
+        if (d.hasSet) row.push(it.qtySet);
+        if (d.hasPcsKg) row.push(it.qtyPcs);
         if (d.hasNg) row.push(it.ng);
       } else {
         if (fields.includes("typeHandle")) row.push(it.typeHandle);
@@ -543,7 +552,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     } else {
       row.push("", "");
     }
-    if (d.isCasting) {
+    if (d.isCasting && d.hasShot) {
       const target = lineTargets.find((candidate) => candidate.satuan === "SHOT"
         && (candidate.shift === header.shift || candidate.shift === "Shift 1 & 2")
         && (candidate.kategori ?? "") === clean(item.castingCategory));
@@ -566,7 +575,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     seen.add(header.id);
   }
   return {
-    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(d.isCasting ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
+    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(d.isCasting && d.hasShot ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
     rows, recordIds, assistedRows, total, limited,
   };
 }

@@ -195,12 +195,17 @@ export async function getTargetPerformance(input: { mode: "day"; date: string } 
       if (recordCategory !== (target.kategori ?? "")) continue;
       const definition = targetLine;
       const isShot = Boolean(definition?.hasShot);
-      const pcs = definition?.hasProductionTotal
+      const pcs = definition?.isCasting
+        ? record.items.reduce((sum, item) => sum + (toFloat(item.qtyPcs) ?? 0), 0)
+        : definition?.hasProductionTotal
         ? toFloat(record.qtyTotal) ?? 0
         : record.items.reduce((sum, item) => sum + (toFloat(item.qty) ?? 0), 0);
       const actual = target.satuan === "SHOT"
         ? (isShot ? toFloat(record.items[0]?.qtyShot) ?? 0 : 0)
-        : target.satuan === "PCS" ? pcs : pcs / (definition?.pcsPerSet || 1);
+        : target.satuan === "PCS" ? pcs
+          : definition?.isCasting
+            ? record.items.reduce((sum, item) => sum + (toFloat(item.qtySet) ?? 0), 0)
+            : pcs / (definition?.pcsPerSet || 1);
       const recordTarget = targetForWorkHours(target.nilai, toFloat(record.jamKerja) ?? 0);
       const operators = [...new Set(record.operators.map((name) => name.trim()).filter(Boolean))];
       if (!operators.length) continue;

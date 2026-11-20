@@ -16,6 +16,7 @@ import { clean, normalizeLini, now, toFloat, toInt, uniqSort } from "./shared";
 import { isValidISODate } from "./date";
 import { parseProduction } from "./validation";
 import { getProductionLine, getProductionProduct } from "./production-master";
+import { targetPerHour } from "./production-target-utils";
 import type { ProductionLineConfig, ProductionOptions } from "./production-master-types";
 import { defaultDetailFields } from "./production-detail-fields";
 
@@ -537,9 +538,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
         : "Master blm diisi";
       const hours = toFloat(header.jamKerja);
       const hourlyTargetText = targets.length
-        ? hours != null && hours > 0
-          ? targets.map((target) => `${target.satuan} ${(target.nilai / hours).toLocaleString("id-ID", { maximumFractionDigits: 2 })}/jam`).join("; ")
-          : "Jam kerja blm diisi"
+        ? targets.map((target) => `${target.satuan} ${targetPerHour(target.nilai).toLocaleString("id-ID", { maximumFractionDigits: 2 })}/jam`).join("; ")
         : "Master blm diisi";
       row.push(targetText, hourlyTargetText);
     } else {
@@ -552,11 +551,12 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
       const actual = toFloat(item.qtyShot) ?? 0;
       const hours = toFloat(header.jamKerja) ?? 0;
       const operatorCount = Math.max(header.operators.length, 1);
-      const targetForRecord = target
-        ? target.nilai * (d.isTeam ? 1 : operatorCount)
+      const targetPerHourForRecord = target
+        ? targetPerHour(target.nilai) * (d.isTeam ? 1 : operatorCount)
         : 0;
+      const targetForRecord = targetPerHourForRecord * hours;
       const shiftAchievement = targetForRecord > 0 ? actual / targetForRecord * 100 : "";
-      const hourlyTarget = hours > 0 && targetForRecord > 0 ? targetForRecord / hours : 0;
+      const hourlyTarget = targetPerHourForRecord;
       const hourlyActual = hours > 0 ? actual / hours : 0;
       const hourlyAchievement = hourlyTarget > 0 ? hourlyActual / hourlyTarget * 100 : "";
       row.push(shiftAchievement, hourlyAchievement);

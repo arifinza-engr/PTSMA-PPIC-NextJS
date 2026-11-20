@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auditLog, productionTarget, produksiBrakeshoe, produksiDiscpad, produksiHandle } from "@/db/schema";
 import { getProductionLine, listProductionProducts } from "./production-master";
 import { now, toFloat } from "./shared";
+import { targetForWorkHours } from "./production-target-utils";
 import { isValidISODate } from "./date";
 
 export const targetProducts = ["brakeshoe", "discpad", "handle"] as const;
@@ -187,7 +188,7 @@ export async function getTargetPerformance(input: { mode: "day"; date: string } 
   const categoryPerformance = performanceTargets.map((target) => {
     const targetLine = products.find((product) => product.kode === target.produk)?.lines.find((line) => line.nama === target.lini);
     const basis = targetLine?.isTeam ? "tim" : "per_orang";
-    const groups = new Map<string, { label: string; operators: Set<string>; mesin: Set<string>; aktual: number; dates: Set<string>; records: number }>();
+    const groups = new Map<string, { label: string; operators: Set<string>; mesin: Set<string>; aktual: number; target: number; dates: Set<string>; records: number }>();
     for (const { produk, record } of records) {
       if (produk !== target.produk || record.lini !== target.lini || record.shift !== target.shift) continue;
       const recordCategory = String(record.items[0]?.castingCategory ?? "");
@@ -200,24 +201,26 @@ export async function getTargetPerformance(input: { mode: "day"; date: string } 
       const actual = target.satuan === "SHOT"
         ? (isShot ? toFloat(record.items[0]?.qtyShot) ?? 0 : 0)
         : target.satuan === "PCS" ? pcs : pcs / (definition?.pcsPerSet || 1);
+      const recordTarget = targetForWorkHours(target.nilai, toFloat(record.jamKerja) ?? 0);
       const operators = [...new Set(record.operators.map((name) => name.trim()).filter(Boolean))];
       if (!operators.length) continue;
     const portions = basis === "per_orang"
-        ? operators.map((name) => ({ key: `person:${name}`, label: name, names: [name], qty: actual / operators.length }))
-        : [{ key: `team:${[...operators].sort().join("\u0000")}`, label: operators.length > 1 ? `${operators.join(", ")} (Tim)` : `${operators[0]} (Tim)`, names: operators, qty: actual }];
+        ? operators.map((name) => ({ key: `person:${name}`, label: name, names: [name], qty: actual / operators.length, target: recordTarget }))
+        : [{ key: `team:${[...operators].sort().join("\u0000")}`, label: operators.length > 1 ? `${operators.join(", ")} (Tim)` : `${operators[0]} (Tim)`, names: operators, qty: actual, target: recordTarget }];
       for (const portion of portions) {
-        const group = groups.get(portion.key) ?? { label: portion.label, operators: new Set<string>(), mesin: new Set<string>(), aktual: 0, dates: new Set<string>(), records: 0 };
+        const group = groups.get(portion.key) ?? { label: portion.label, operators: new Set<string>(), mesin: new Set<string>(), aktual: 0, target: 0, dates: new Set<string>(), records: 0 };
         portion.names.forEach((name) => group.operators.add(name));
         const machine = definition?.hasMesin ? String(record.items[0]?.mesin ?? "").trim() : "";
         if (machine) group.mesin.add(machine);
         group.aktual += portion.qty;
+        group.target += portion.target;
         group.dates.add(record.tanggal);
         group.records += 1;
         groups.set(portion.key, group);
       }
     }
     const groupRows = [...groups.entries()].map(([key, group]) => {
-      const targetTotal = target.nilai * group.dates.size;
+      const targetTotal = group.target;
       return { key, label: group.label, kategori: target.kategori ?? "", mesin: [...group.mesin].sort((a, b) => a.localeCompare(b, "id", { numeric: true })), target: targetTotal, actual: group.aktual,
         percentage: targetTotal > 0 ? group.aktual / targetTotal * 100 : null,
         operatorCount: group.operators.size, recordCount: group.records, activeDays: group.dates.size };

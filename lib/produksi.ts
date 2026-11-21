@@ -352,26 +352,27 @@ function layoutFor(line: Line, d: LineConfig) {
     if (d.isCasting) {
       const headers = [
         "TANGGAL", "LINI", "OPERATOR",
+        "SHIFT", "JAM",
         ...(fields.includes("type") ? ["TYPE"] : []), ...(fields.includes("grade") ? ["GRADE"] : []),
         ...(d.hasMerk ? ["MERK"] : []),
-        ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), "SHIFT", ...(d.hasMesin ? ["MESIN"] : []),
-        "JAM KERJA", ...(d.hasShot ? ["JUMLAH PRODUKSI SHOT"] : []),
-        ...(d.hasSet ? ["JUMLAH PRODUKSI SET"] : []),
-        ...(d.hasPcsKg ? ["JUMLAH PRODUKSI PCS"] : []),
-        ...(d.hasNg ? ["TOTAL NG"] : []), "KETERANGAN",
+        ...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []),
+        ...(d.hasMesin ? ["MESIN"] : []),
+        ...(d.hasShot ? ["SHOT"] : []),
+        ...(d.hasSet ? ["SET"] : []),
+        ...(d.hasPcsKg ? ["PCS"] : []),
+        ...(d.hasNg ? ["NG"] : []), "KETERANGAN",
       ];
       return {
         headers,
         buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
           const g = grp(p, isFirst, ops);
           const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+          row.push(g.shift, g.jam);
           if (fields.includes("type")) row.push(it.type);
           if (fields.includes("grade")) row.push(it.grade);
           if (d.hasMerk) row.push(it.merk);
           if ((d.castingCategories ?? []).length) row.push(it.castingCategory);
-          row.push(g.shift);
           if (d.hasMesin) row.push(it.mesin);
-          row.push(g.jam);
           if (d.hasShot) row.push(it.qtyShot);
           if (d.hasSet) row.push(it.qtySet);
           if (d.hasPcsKg) row.push(it.qtyPcs);
@@ -382,23 +383,25 @@ function layoutFor(line: Line, d: LineConfig) {
       };
     }
     const headers = ["TANGGAL", "LINI", d.isTeam ? "OPERATOR / ANGGOTA TIM" : "OPERATOR"];
+    headers.push("SHIFT", "JAM");
     if (fields.includes("type")) headers.push("TYPE");
     if (fields.includes("grade")) headers.push("GRADE");
     if (fields.includes("kulit")) headers.push("KULIT");
     if (d.hasMerk) headers.push("MERK");
-    headers.push("SHIFT", "JAM KERJA", "TOTAL JUMLAH PRODUKSI");
-    if (d.hasNg) headers.push("TOTAL NG");
+    headers.push(d.hasShot && !d.hasSet ? "SHOT" : d.hasSet && !d.hasShot ? "SET" : "TOTAL JUMLAH PRODUKSI");
+    if (d.hasNg) headers.push("NG");
     headers.push("KETERANGAN");
     return {
       headers,
       buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
         const g = grp(p, isFirst, ops);
         const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+        row.push(g.shift, g.jam);
         if (fields.includes("type")) row.push(it.type);
         if (fields.includes("grade")) row.push(it.grade);
         if (fields.includes("kulit")) row.push(it.kulit);
         if (d.hasMerk) row.push(it.merk);
-        row.push(g.shift, g.jam, it.qty);
+        row.push(it.qty);
         if (d.hasNg) row.push(it.ng);
         row.push(g.ket);
         return row;
@@ -421,15 +424,15 @@ function layoutFor(line: Line, d: LineConfig) {
     headers.push("QTY (PCS)");
     if (d.hasNgB) headers.push("NG A", "NG B");
     else if (hasNg) headers.push("NG");
-    headers.push("SHIFT", "JAM");
-    headers.push("JUMLAH PRODUKSI (PCS)", d.hasShot && !d.hasSet ? "JUMLAH PRODUKSI (SHOT)" : "JUMLAH PRODUKSI (SET)");
+    headers.splice(3, 0, "SHIFT", "JAM");
+    headers.push("PCS", d.hasShot && !d.hasSet ? "SHOT" : "SET");
     headers.push("KETERANGAN");
 
     return {
       headers,
       buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
         const g = grp(p, isFirst, ops);
-        const row: ReportCell[] = [g.tanggal, g.lini, g.operator];
+        const row: ReportCell[] = [g.tanggal, g.lini, g.operator, g.shift, g.jam];
         if (fields.includes("kode")) row.push(it.kode);
         if (d.hasProcess) row.push(isFirst ? p.proses : "");
         if (hasAb) row.push(it.gradeAb);
@@ -438,7 +441,6 @@ function layoutFor(line: Line, d: LineConfig) {
         row.push(it.qty);
         if (d.hasNgB) row.push(it.ng, it.ngB);
         else if (hasNg) row.push(it.ng);
-        row.push(g.shift, g.jam);
         row.push(g.qtyPcs);
         row.push(d.hasShot && !d.hasSet ? g.qtyShot : g.qtySet);
         row.push(g.ket);
@@ -450,14 +452,14 @@ function layoutFor(line: Line, d: LineConfig) {
   // handle
   const isCasting = !!d.isCasting;
   const fields = d.detailFields ?? [];
-  const headers = ["LINI", "OPERATOR", "TANGGAL", "SHIFT", "JAM KERJA"];
-  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), ...(d.hasMesin ? ["MESIN"] : []), ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["POSISI HANDLE"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), ...(d.hasShot ? ["JUMLAH PRODUKSI SHOT"] : []), ...(d.hasSet ? ["JUMLAH PRODUKSI SET"] : []), ...(d.hasPcsKg ? ["JUMLAH PRODUKSI PCS"] : []), ...(d.hasNg ? ["TOTAL NG"] : []));
+  const headers = ["TANGGAL", "LINI", "OPERATOR", "SHIFT", "JAM"];
+  if (isCasting) headers.push(...((d.castingCategories ?? []).length ? ["KATEGORI CASTING"] : []), ...(d.hasMesin ? ["MESIN"] : []), ...(fields.includes("typeHandle") ? ["TYPE HANDLE"] : []), ...(fields.includes("posisiHandle") ? ["LH/RH"] : []), ...(fields.includes("warna") ? ["WARNA"] : []), ...(d.hasShot ? ["SHOT"] : []), ...(d.hasSet ? ["SET"] : []), ...(d.hasPcsKg ? ["PCS"] : []), ...(d.hasNg ? ["NG"] : []));
   else {
     if (fields.includes("typeHandle")) headers.push("TYPE HANDLE");
-    if (fields.includes("posisiHandle")) headers.push("POSISI HANDLE");
+    if (fields.includes("posisiHandle")) headers.push("LH/RH");
     if (fields.includes("warna")) headers.push("WARNA");
     headers.push("TOTAL JUMLAH PRODUKSI");
-    if (d.hasNg) headers.push("TOTAL NG");
+    if (d.hasNg) headers.push("NG");
   }
   headers.push("KETERANGAN");
 
@@ -465,7 +467,7 @@ function layoutFor(line: Line, d: LineConfig) {
     headers,
     buildRow: (p: Prod, it: Item, isFirst: boolean, ops: string) => {
       const g = grp(p, isFirst, ops);
-        const row: ReportCell[] = [g.lini, g.operator, g.tanggal, g.shift, g.jam];
+        const row: ReportCell[] = [g.tanggal, g.lini, g.operator, g.shift, g.jam];
       if (isCasting) {
         row.push(...((d.castingCategories ?? []).length ? [it.castingCategory] : []));
         if (d.hasMesin) row.push(it.mesin);
@@ -543,7 +545,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
           && (target.kategori ?? "") === clean(item.castingCategory))
         .sort((a, b) => ["PCS", "SET", "SHOT"].indexOf(a.satuan) - ["PCS", "SET", "SHOT"].indexOf(b.satuan));
       const targetText = targets.length
-        ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")} (${d.isTeam ? "tim" : "per orang"})`).join("; ")
+        ? targets.map((target) => `${target.satuan} ${target.nilai.toLocaleString("id-ID")}`).join("; ")
         : "Master blm diisi";
       const hourlyTargetText = targets.length
         ? targets.map((target) => `${target.satuan} ${targetPerHour(target.nilai).toLocaleString("id-ID", { maximumFractionDigits: 2 })}/jam`).join("; ")
@@ -575,7 +577,7 @@ export async function getProductionData(line: Line, params: ProductionQuery = {}
     seen.add(header.id);
   }
   return {
-    headers: [...reportHeaders, "TARGET MASTER", "TARGET PER JAM", ...(d.isCasting && d.hasShot ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
+    headers: [...reportHeaders, "TARGET", "TARGET PER JAM", ...(d.isCasting && d.hasShot ? ["PENCAPAIAN TARGET SHIFT", "PENCAPAIAN TARGET PER JAM"] : [])],
     rows, recordIds, assistedRows, total, limited,
   };
 }

@@ -102,7 +102,7 @@ function formatDate(dateStr: string): string {
 
 function formatCell(val: Cell, header: string): string {
   if (val === "" || val === null || val === undefined) {
-    return header === "HASIL PRODUKSI (SET)" ? "—" : "";
+    return header === "SET" ? "—" : "";
   }
 
   if (header.toUpperCase().includes("TANGGAL")) {
@@ -578,12 +578,13 @@ export default function HasilProduksi({
                 <TableHeader>
                   <TableRow>
                     {table.getHeaderGroups().map((headerGroup) => headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className="sticky top-0 z-20 bg-muted">
+                      <TableHead key={header.id} className="sticky top-0 z-20 whitespace-normal bg-muted text-center leading-tight">
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="h-auto min-h-9 whitespace-normal px-2 text-center leading-tight"
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             <table.FlexRender header={header} />
@@ -623,7 +624,7 @@ export default function HasilProduksi({
                           : undefined}
                       >
                         {row.getAllCells().map((cell) => (
-                          <TableCell key={cell.id}>
+                          <TableCell key={cell.id} className="whitespace-nowrap text-left">
                             <table.FlexRender cell={cell} />
                           </TableCell>
                         ))}

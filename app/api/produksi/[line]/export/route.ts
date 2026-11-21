@@ -57,7 +57,7 @@ export async function GET(
         pattern: "solid",
         fgColor: { argb: "FF2563EB" }, // Blue
       };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       cell.border = {
         top: { style: "thin" },
         left: { style: "thin" },
@@ -79,6 +79,7 @@ export async function GET(
       });
       const dataRow = worksheet.addRow(exportRow);
       dataRow.eachCell((cell) => {
+        cell.alignment = { horizontal: "left", vertical: "middle", wrapText: false };
         // Alternate row colors
         if (rowIdx % 2 === 0) {
           cell.fill = {
